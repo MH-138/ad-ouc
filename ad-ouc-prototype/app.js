@@ -8,9 +8,48 @@
   var STORE_KEY = "adouc_state_v1";
   var LIGHT = { green: "🟢", yellow: "🟡", red: "🔴" };
 
+  /* 角色定义：身份切换须真实驱动行为（可见量表 / 人称 / 反馈 / 字号） */
+  var ROLES = {
+    rater:     { name: "主试（医生）", tag: "主试", desc: "可操作全部量表，逐题提问并记录，可见分数与三色灯。" },
+    self:      { name: "患者（自评）", tag: "自评", desc: "仅做自评量表（SCD-Q9），界面放大字号，不显示分数与灯色。" },
+    informant: { name: "家属（知情者）", tag: "家属", desc: "仅做知情者量表（FAQ / NPI / CDR），问题人称自动变为『他/她』。" }
+  };
+  function roleTag(r) { return (ROLES[r] && ROLES[r].tag) || r; }
+  /* 三通道：首页按通道分流（参考 ad-scd.ai.studio 的三入口结构）。
+     rater 通道可见全部量表；self / informant 仅见通道内量表。 */
+  var CHANNELS = {
+    self: {
+      name: "受试者自评通道", en: "Patient Self-Assessment",
+      desc: "面向受试者本人。大字清晰排版、语音朗读、生活化对话，轻松完成主观认知下降自评。",
+      scales: ["SCD-Q9"]
+    },
+    informant: {
+      name: "家属与知情者观察通道", en: "Informant & Family Observation",
+      desc: "面向与受试者共同生活的家属或照料者。客观记录近期记忆变化、日常功能与精神行为表现。",
+      scales: ["FAQ", "NPI", "CDR"]
+    },
+    rater: {
+      name: "医师临床与科研工作站", en: "Clinician & Researcher Workbench",
+      desc: "面向神经内科医师与科研人员。提供标准神经心理测评、自动计分、综合诊断报告与 Excel 导出。",
+      scales: null // null = 全部
+    }
+  };
+  /* 该量表对当前身份是否可见 */
+  function scaleVisibleTo(key, role) {
+    if (role === "rater") return true;
+    var ch = CHANNELS[role];
+    return !!(ch && ch.scales && ch.scales.indexOf(key) >= 0);
+  }
+  /* 家属视角把第二人称统一替换为『他/她』，体现角色切换 */
+  function applyPronoun(text) {
+    if (state.role !== "informant" || !text) return text;
+    return text.replace(/您/g, "他/她").replace(/你/g, "他/她");
+  }
+
   /* ---------- 全局状态 ---------- */
   var state = {
     role: "rater",            // rater(主试) / self(患者) / informant(家属)
+    channel: null,           // 当前选中的首页通道（null=通道选择页）
     view: "home",            // home / chat
     patient: null,           // 当前建档信息
     flow: null,              // 当前流程对象
@@ -87,6 +126,9 @@
   /* ---------- 渲染：顶栏 ---------- */
   function renderTop() {
     $("roleSelect").value = state.role;
+    var badge = $("roleBadge");
+    if (badge) badge.textContent = "身份：" + ROLES[state.role].name;
+    document.body.classList.toggle("role-self", state.role === "self");
     var dot = $("offlineDot");
     if (navigator.onLine === false) {
       dot.textContent = "● 离线模式";
@@ -248,7 +290,7 @@
     var it = flow.items[state.idx];
     var q = it.q;
     if (it.id === "birth") q += "（当前 " + new Date().getFullYear() + " 年）";
-    botSay(q);
+    botSay(applyPronoun(q));
   }
 
   /* ---------- 流程：建档 ---------- */
@@ -295,21 +337,27 @@
     state.flow = null; state.flowType = "scaleMenu";
     state.idx = 0; state.answers = {};
     state.messages = [];
-    botSay(state.patient ? ("好的，" + (state.patient.name || "您好") + "，咱们开始做测验吧～") : "咱们开始做测验吧～");
+    botSay(applyPronoun(state.patient ? ("好的，" + (state.patient.name || "您好") + "，咱们开始做测验吧～") : "咱们开始做测验吧～"));
     renderChat(); renderScaleCards();
   }
   function renderScaleCards() {
     var c = $("composer");
     c.innerHTML = "";
-    var hint = el("div", "hint", "请选择一个量表（点卡片开始）：");
+    var visible = Object.keys(window.SCALES).filter(function (k) { return scaleVisibleTo(k, state.role); });
+    var hint = el("div", "hint",
+      "当前身份【" + ROLES[state.role].name + "】可操作以下量表（点卡片开始）：");
     c.appendChild(hint);
-    Object.keys(window.SCALES).forEach(function (key) {
+    visible.forEach(function (key) {
       var s = window.SCALES[key];
       var card = el("button", "scaleCard");
-      card.innerHTML = "<b>" + s.short + "</b><span>" + s.name + "</span>";
+      card.innerHTML = "<b>" + s.short + "</b><span>" + s.name + "</span>" +
+        "<em class='ctag " + s.role + "'>" + roleTag(s.role) + "</em>";
       card.onclick = function () { startScale(key); };
       c.appendChild(card);
     });
+    if (!visible.length) {
+      c.appendChild(el("div", "hint", "（当前身份暂无可操作量表）"));
+    }
     c.appendChild(bigBtn("🏠 返回首页", goHome));
   }
   function startScale(key) {
@@ -317,8 +365,8 @@
     state.flow = s; state.flowType = "scale";
     state.idx = 0; state.answers = {};
     state.messages = [];
-    botSay(s.intro);
-    botSay(s.items[0].q);
+    botSay(applyPronoun(s.intro));
+    botSay(applyPronoun(s.items[0].q));
     switchView();
   }
 
@@ -370,23 +418,65 @@
     switchView();
   }
 
-  /* ---------- 首页 ---------- */
+  /* ---------- 首页（三通道入口，参考 ad-scd.ai.studio） ---------- */
   function renderHome() {
     var h = $("home");
     h.innerHTML = "";
     h.appendChild(el("div", "htitle", "认知障碍早期筛查"));
     h.appendChild(el("div", "hsub", "聊天式 · 自动计分 · 红黄绿灯预警"));
+
+    // 通道选择页
+    if (!state.channel) {
+      h.appendChild(el("div", "hrole", "请选择测评通道或工作台"));
+      Object.keys(CHANNELS).forEach(function (r) {
+        var ch = CHANNELS[r];
+        var card = el("button", "chCard ch-" + r);
+        var scalesTxt = ch.scales
+          ? ch.scales.map(function (k) { return window.SCALES[k].short; }).join(" · ")
+          : "全部量表 + 建档 + 报告 + 导出";
+        card.innerHTML = "<b>" + ch.name + "</b><span class='chen'>" + ch.en +
+          "</span><p>" + ch.desc + "</p><div class='citems'>包含测评：" + scalesTxt + "</div>";
+        card.onclick = function () { enterChannel(r); };
+        h.appendChild(card);
+      });
+      return;
+    }
+
+    // 已选通道：操作面板
+    var ch = CHANNELS[state.channel];
+    h.appendChild(el("div", "hrole", "当前通道：" + ch.name + "（" + ROLES[state.channel].name + "）"));
+    h.appendChild(bigBtn("↩ 返回通道选择", function () { state.channel = null; renderHome(); switchView(); }));
+
     var resume = (state.patient && state.flow && state.idx < state.flow.items.length);
     if (resume) {
       h.appendChild(bigBtn("↩ 继续上次（" + (state.patient.name || "未命名") + "）", function () {
         state.view = "chat"; switchView();
       }));
     }
-    h.appendChild(bigBtn("➕ 新患者建档", startIntake));
-    if (state.patient) {
-      h.appendChild(bigBtn("📋 继续评估量表", showScaleMenu));
+
+    if (state.channel === "rater") {
+      h.appendChild(bigBtn("➕ 新患者建档", startIntake));
+      if (state.patient) h.appendChild(bigBtn("📋 选择量表评估", showScaleMenu));
+      h.appendChild(bigBtn("🩺 综合诊断报告", showReport));
+      h.appendChild(bigBtn("📤 导出 Excel", showExportMenu));
+    } else {
+      ch.scales.forEach(function (key) {
+        var s = window.SCALES[key];
+        var card = el("button", "scaleCard");
+        card.innerHTML = "<b>" + s.short + "</b><span>" + s.name + "</span>";
+        card.onclick = function () { startScale(key); };
+        h.appendChild(card);
+      });
     }
-    h.appendChild(bigBtn("📤 导出 Excel", showExportMenu));
+  }
+
+  function enterChannel(role) {
+    state.role = role;
+    state.channel = role;
+    save();
+    renderTop();
+    renderHome();
+    switchView();
   }
 
   /* ---------- 导出 ---------- */
@@ -451,9 +541,55 @@
 
   /* ---------- 角色切换 ---------- */
   function onRoleChange() {
-    state.role = $("roleSelect").value;
+    var nr = $("roleSelect").value;
+    if (nr === state.role) return;
+    state.role = nr;
+    state.channel = nr; // 同步通道，保持首页与下拉一致
     save();
     renderTop();
+    renderHome();
+    switchView();
+  }
+
+  /* ---------- 综合诊断报告（医师通道） ---------- */
+  function showReport() {
+    var box = $("report");
+    box.innerHTML = "";
+    var hd = el("div", "rep-hd", "🩺 综合诊断报告");
+    var close = el("button", "rep-close", "✕");
+    close.onclick = function () { box.style.display = "none"; };
+    hd.appendChild(close);
+    box.appendChild(hd);
+
+    var rec = currentRec();
+    if (!rec || !(rec.results && rec.results.length)) {
+      box.appendChild(el("div", "rep-body", "暂无报告数据：请先建档并完成至少一个量表评估。"));
+      box.style.display = "flex";
+      return;
+    }
+    var body = el("div", "rep-body");
+    var p = rec.patient;
+    body.appendChild(el("div", "rep-p",
+      "受试者：" + (p.name || "—") + "（" + (p.code || "—") + "）　年龄 " +
+      (p.age != null ? p.age + " 岁" : "—") + "　教育 " + (p.edu != null ? p.edu + " 年" : "—")));
+    var list = el("div", "rep-list");
+    rec.results.forEach(function (r) {
+      var item = el("div", "rep-item " + r.level);
+      item.innerHTML = "<span class='ri-name'>" + r.name + "</span>" +
+        "<span class='ri-score'>" + LIGHT[r.level] + " 总分 " + r.score + "</span>" +
+        "<span class='ri-label'>" + r.label + "</span>";
+      list.appendChild(item);
+    });
+    body.appendChild(list);
+    var reds = rec.results.filter(function (r) { return r.level === "red"; }).length;
+    var yellows = rec.results.filter(function (r) { return r.level === "yellow"; }).length;
+    var overall = reds > 0
+      ? "🔴 存在需关注的异常指标，建议由神经内科医师进一步评估。"
+      : (yellows > 0 ? "🟡 部分指标处于临界，建议随访观察。" : "🟢 已完成量表未见明显异常提示。");
+    body.appendChild(el("div", "rep-overall", overall));
+    body.appendChild(el("div", "rep-note", "* 本报告为筛查提示，不作诊断结论；最终判断由医师结合临床综合得出。"));
+    box.appendChild(body);
+    box.style.display = "flex";
   }
 
   /* ---------- 初始化 ---------- */

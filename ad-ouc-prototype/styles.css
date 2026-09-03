@@ -28,6 +28,11 @@ body { display: flex; flex-direction: column; height: 100vh; }
 }
 .offline { font-size: 14px; color: #9fe6a0; }
 .offline.on { color: #ffd166; }
+.rolebadge {
+  font-size: 14px; font-weight: 700; color: #ffe08a;
+  background: rgba(255,255,255,.14); padding: 4px 10px; border-radius: 999px;
+  white-space: nowrap;
+}
 
 /* ---- 首页 ---- */
 .home {
@@ -36,6 +41,73 @@ body { display: flex; flex-direction: column; height: 100vh; }
 }
 .htitle { font-size: 26px; font-weight: 800; color: #1f3a5f; text-align: center; margin-top: 8px; }
 .hsub { font-size: 15px; color: #5a6b80; text-align: center; margin-bottom: 8px; }
+.hrole {
+  font-size: 15px; line-height: 1.5; color: #1f3a5f;
+  background: #e7eefb; border: 1px solid #c3d4f0; border-left: 5px solid #2f6fd0;
+  padding: 10px 14px; border-radius: 10px; text-align: left;
+}
+.ctag {
+  display: inline-block; font-size: 12px; font-weight: 700; margin-top: 4px;
+  padding: 2px 8px; border-radius: 999px;
+}
+.ctag.self { background: #e7f7ec; color: #1e8e4f; }
+.ctag.rater { background: #e7eefb; color: #2f6fd0; }
+.ctag.informant { background: #fdeef6; color: #c0399b; }
+
+/* 三通道入口卡片 */
+.chCard {
+  text-align: left; width: 100%; cursor: pointer;
+  background: #fff; border: 1px solid #d7e0ee; border-left: 6px solid #2f6fd0;
+  border-radius: 14px; padding: 16px 18px; color: #1a1a1a;
+  box-shadow: 0 1px 3px rgba(31,58,95,.06);
+  transition: transform .08s ease, box-shadow .08s ease;
+}
+.chCard:active { transform: scale(.99); }
+.chCard b { font-size: 19px; color: #1f3a5f; display: block; }
+.chCard .chen { font-size: 12px; color: #8a98ad; letter-spacing: .3px; }
+.chCard p { font-size: 13px; color: #5a6b80; line-height: 1.5; margin: 8px 0 8px; }
+.chCard .citems { font-size: 13px; color: #2f6fd0; background: #f1f6ff; border-radius: 8px; padding: 6px 10px; }
+.ch-self { border-left-color: #1e8e4f; }
+.ch-self b { color: #146b3b; }
+.ch-self .citems { color: #1e8e4f; background: #e7f7ec; }
+.ch-informant { border-left-color: #c0399b; }
+.ch-informant b { color: #9c2b7c; }
+.ch-informant .citems { color: #c0399b; background: #fdeef6; }
+
+/* 综合诊断报告浮层 */
+.report-overlay {
+  position: fixed; inset: 0; z-index: 50; display: none;
+  flex-direction: column; background: rgba(20,30,50,.45); padding: 6vh 4vw;
+}
+.report-overlay > .rep-hd, .report-overlay > .rep-body { max-width: 560px; width: 100%; margin: 0 auto; }
+.rep-hd {
+  display: flex; align-items: center; justify-content: space-between;
+  background: #fff; color: #1f3a5f; font-size: 18px; font-weight: 800;
+  padding: 14px 18px; border-radius: 14px 14px 0 0; border-bottom: 2px solid #2f6fd0;
+}
+.rep-close { border: none; background: #eef2f8; color: #5a6b80; font-size: 16px; border-radius: 8px; padding: 4px 10px; cursor: pointer; }
+.rep-body { background: #fff; border-radius: 0 0 14px 14px; padding: 16px 18px 20px; overflow-y: auto; }
+.rep-p { font-size: 14px; color: #1a1a1a; margin-bottom: 12px; }
+.rep-list { display: flex; flex-direction: column; gap: 8px; }
+.rep-item {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  border-radius: 10px; padding: 10px 12px; border: 1px solid #e3e9f2;
+}
+.rep-item.green { background: #e7f7ec; border-color: #b6e3c6; }
+.rep-item.yellow { background: #fff8e1; border-color: #f3e0a6; }
+.rep-item.red { background: #fdeaea; border-color: #f3bcbc; }
+.ri-name { font-weight: 700; color: #1f3a5f; min-width: 130px; }
+.ri-score { font-size: 14px; }
+.ri-label { font-size: 13px; color: #5a6b80; margin-left: auto; }
+.rep-overall { margin-top: 14px; font-size: 15px; font-weight: 700; color: #1f3a5f; background: #e7eefb; border-radius: 10px; padding: 12px 14px; }
+.rep-note { margin-top: 10px; font-size: 12px; color: #8a98ad; }
+
+/* 患者（自评）模式：整体放大字号，强化适老化 */
+body.role-self .bubble { font-size: 21px; padding: 14px 16px; }
+body.role-self .bigbtn { font-size: 21px; min-height: 58px; padding: 14px 16px; }
+body.role-self .htitle { font-size: 30px; }
+body.role-self .scaleCard b { font-size: 21px; }
+body.role-self .scaleCard span { font-size: 15px; }
 
 /* ---- 大按钮 ---- */
 .bigbtn {

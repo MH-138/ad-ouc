@@ -14,6 +14,7 @@
       <span class="ttitle">认知筛查</span>
     </div>
     <div class="t-right">
+      <span id="roleBadge" class="rolebadge"></span>
       <select id="roleSelect" class="role" title="角色切换">
         <option value="rater">主试（医生）</option>
         <option value="self">患者（自评）</option>
@@ -31,6 +32,9 @@
     <div id="chat" class="chat"></div>
     <div id="composer" class="composer"></div>
   </section>
+
+  <!-- 综合诊断报告浮层 -->
+  <div id="report" class="report-overlay" style="display:none;"></div>
 
   <script src="scales.js"></script>
   <script src="app.js"></script>

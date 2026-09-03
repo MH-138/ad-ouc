@@ -153,9 +153,9 @@ window.SCALES = {
     ]}
   },
 
-  /* 6. AVLT 听觉词汇学习测验（主试口述 + 数字录入） */
+  /* 6. AVLT-H 华山记忆测验（主试口述 + 数字录入） */
   "AVLT": {
-    name: "听觉词汇学习测验（AVLT）", short: "AVLT", role: "rater",
+    name: "听觉词汇学习测验（AVLT-H 华山记忆测验）", short: "AVLT-H", role: "rater",
     intro: "我会念一些词，您尽量记住，念完请说出记得的词。共 3 轮。",
     items: [
       { id:"n1", q:"第 1 轮：念完词后，您回忆出几个词？（0~15）", kind:"number", max:15, hint:"即时回忆词数" },
@@ -222,7 +222,7 @@ window.SCALES = {
 
   /* 10. CDR 临床痴呆评定量表（主试+知情者·6域） */
   "CDR": {
-    name: "临床痴呆评定量表（CDR·6域）", short: "CDR", role: "rater",
+    name: "临床痴呆评定量表（CDR·6域）", short: "CDR", role: "informant",
     intro: "最后综合评估 6 个方面，每方面按严重程度选（0 正常 / 0.5 可疑 / 1 轻度 / 2 中度 / 3 重度）。",
     items: [
       { id:"r1", q:"记忆", kind:"choice",
