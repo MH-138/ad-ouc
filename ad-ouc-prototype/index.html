@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>认知障碍早期筛查 · 聊天式采集</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- 顶栏 -->
+  <header id="topbar">
+    <div class="t-left">
+      <button id="btnHome" class="iconbtn" title="返回首页">🏠</button>
+      <span class="ttitle">认知筛查</span>
+    </div>
+    <div class="t-right">
+      <select id="roleSelect" class="role" title="角色切换">
+        <option value="rater">主试（医生）</option>
+        <option value="self">患者（自评）</option>
+        <option value="informant">家属（知情者）</option>
+      </select>
+      <span id="offlineDot" class="offline">● 在线</span>
+    </div>
+  </header>
+
+  <!-- 首页 -->
+  <main id="home" class="home"></main>
+
+  <!-- 聊天区 -->
+  <section id="chatWrap" class="chatwrap" style="display:none;">
+    <div id="chat" class="chat"></div>
+    <div id="composer" class="composer"></div>
+  </section>
+
+  <script src="scales.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
