@@ -21,17 +21,17 @@ window.INTAKE = {
   role: "rater",
   intro: "您好呀，欢迎参加咱们的健康项目～我先简单记一下您的情况，就跟拉家常一样，很快就完事。",
   items: [
-    { id: "name",   q: "请问怎么称呼您？（或患者姓名）", kind: "text" },
+    { id: "name",   q: "请问怎么称呼您？（或患者姓名）", kind: "text", required: true, maxLength: 40 },
     { id: "gender", q: "性别是？", kind: "choice", options: [{label:"男",score:0},{label:"女",score:0}] },
-    { id: "birth",  q: "出生年份是？（如 1958，系统自动算年龄）", kind: "number", hint: "输入 4 位年份" },
-    { id: "edu",    q: "一共上了几年学？", kind: "number", hint: "年" },
-    { id: "height", q: "身高大概多少？（厘米）", kind: "number", hint: "cm" },
-    { id: "weight", q: "体重大概多少？（公斤）", kind: "number", hint: "kg" },
+    { id: "birth",  q: "出生年份是？（如 1958，系统自动算年龄）", kind: "number", min: 1900, max: new Date().getFullYear(), hint: "输入 4 位年份" },
+    { id: "edu",    q: "一共上了几年学？", kind: "number", min: 0, max: 30, hint: "0~30 年" },
+    { id: "height", q: "身高大概多少？（厘米）", kind: "number", min: 80, max: 230, hint: "80~230 cm" },
+    { id: "weight", q: "体重大概多少？（公斤）", kind: "number", min: 20, max: 250, hint: "20~250 kg" },
     { id: "marry",  q: "婚姻状况？", kind: "choice",
       options: [{label:"已婚",score:0},{label:"未婚",score:0},{label:"离异/丧偶",score:0}] },
     { id: "live",   q: "平时和谁一起住？", kind: "choice",
       options: [{label:"独居",score:0},{label:"与家人同住",score:0}] },
-    { id: "phone",  q: "留一个方便联系家人的手机号吧？", kind: "text" }
+    { id: "phone",  q: "留一个方便联系家人的手机号吧？（可选）", kind: "text", pattern: "^1[3-9]\\d{9}$", optional: true }
   ]
 };
 
