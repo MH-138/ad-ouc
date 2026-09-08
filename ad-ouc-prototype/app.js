@@ -126,25 +126,83 @@
   }
 
   /* ---------- 计分 ---------- */
+  /* 华盛顿大学 CDR Global 判定（演示实现，精确判定应按官方查表） */
+  function cdrGlobal(b) {
+    var m = b.r1, others = [b.r2, b.r3, b.r4, b.r5, b.r6];
+    var maxOther = Math.max.apply(null, others);
+    var cntHalf = others.filter(function (x) { return x >= 0.5; }).length;
+    if (m === 0 && maxOther === 0) return 0;
+    if (m === 0.5 && maxOther === 0) return 0.5;
+    if (m >= 1 && m < 2 && cntHalf >= 1) return 1;
+    if (m >= 2 && m < 3 && maxOther >= 1 && cntHalf >= 2) return 2;
+    if (m === 3 && others.filter(function (x) { return x === 3; }).length >= 3) return 3;
+    return m; // 兜底：按记忆域近似
+  }
+
   function compute(flow, answers) {
     var sc = flow.scoring || { type: "sum", thresholds: [] };
-    var total = 0;
+    var total = 0, details = null;
     if (sc.type === "primary") {
       total = Number(answers[sc.primaryItem] || 0);
+      if (flow.short === "AVLT" || flow.short === "AVLT-H") {
+        var at1 = Number(answers.t1 || 0), at2 = Number(answers.t2 || 0), at3 = Number(answers.t3 || 0);
+        details = { learning: { t1: at1, t2: at2, t3: at3, sum: at1 + at2 + at3 },
+                    recog: answers.n5 != null ? Number(answers.n5) : null };
+      }
+      if (flow.short === "VFT") {
+        details = { total: Number(answers.v1 || 0),
+                    segments: [Number(answers.v2 || 0), Number(answers.v3 || 0),
+                               Number(answers.v4 || 0), Number(answers.v5 || 0)] };
+      }
     } else {
       flow.items.forEach(function (it) {
         var v = answers[it.id];
         if (v == null) return;
-        if (it.kind === "choice" || it.kind === "emoji") total += Number(v);
-        else if (it.kind === "number" || it.kind === "timer") total += Number(v);
+        if (it.count === false) return; // 仅作记录/趋势、不计入总分（如 VFT 分段）
+        if (it.kind === "choice" || it.kind === "emoji" ||
+            it.kind === "number" || it.kind === "timer" || it.kind === "recog") total += Number(v);
       });
     }
+
+    // 各维度小计
+    var dims = null;
+    if (flow.dimensions && flow.dimensions.length) {
+      dims = {};
+      flow.dimensions.forEach(function (d) {
+        var s = 0, m = 0;
+        d.items.forEach(function (id) {
+          var it = null;
+          for (var i = 0; i < flow.items.length; i++) { if (flow.items[i].id === id) { it = flow.items[i]; break; } }
+          var v = answers[id];
+          if (v != null && it && it.count !== false &&
+              (it.kind === "choice" || it.kind === "emoji" ||
+               it.kind === "number" || it.kind === "timer" || it.kind === "recog")) {
+            s += Number(v); m += (it.max != null ? Number(it.max) : 0);
+          }
+        });
+        dims[d.key] = { name: d.name, score: s, max: d.max || m };
+      });
+    }
+
     var hit = null;
     (sc.thresholds || []).forEach(function (t) {
       if (total >= t.min && total <= t.max) hit = t;
     });
     if (!hit) hit = { level: "yellow", label: "（未匹配阈值）" };
-    return { total: total, level: hit.level, label: hit.label };
+    var level = hit.level, label = hit.label;
+
+    // CDR：由记忆域主导给出 Global，灯色与标签以 Global 为准
+    if (flow.short === "CDR") {
+      var boxes = {};
+      flow.items.forEach(function (it) { boxes[it.id] = Number(answers[it.id] || 0); });
+      var g = cdrGlobal(boxes);
+      var gname = { 0: "正常", 0.5: "可疑/极早期", 1: "轻度痴呆", 2: "中度痴呆", 3: "重度痴呆" }[g] || ("级别 " + g);
+      var glevel = (g === 0 || g === 0.5) ? "green" : (g === 1 ? "yellow" : "red");
+      level = glevel;
+      label = "CDR-SB " + fmt(total) + " · Global " + g + "（" + gname + "）";
+      details = { sb: total, global: g, globalName: gname };
+    }
+    return { total: total, level: level, label: label, details: details, dimensions: dims };
   }
 
   /* ---------- 消息流 ---------- */
@@ -292,12 +350,16 @@
         var b = bigBtn(f, function () { answer(it, i, f); });
         b.classList.add("emoji"); c.appendChild(b);
       });
-    } else if (it.kind === "number" || it.kind === "timer") {
-      if (it.kind === "timer") {
-        c.appendChild(timerBlock(it));
-      } else {
-        c.appendChild(numberBlock(it, function (val) { answer(it, val, "" + val); }));
-      }
+    } else if (it.kind === "number") {
+      if (it.reveal && state.role === "rater") c.appendChild(revealPanel(it.reveal));
+      if (it.anchors) c.appendChild(anchorPanel(it.anchors));
+      c.appendChild(numberBlock(it, function (val) { answer(it, val, "" + val); }));
+    } else if (it.kind === "timer") {
+      c.appendChild(timerBlock(it));
+    } else if (it.kind === "delay") {
+      c.appendChild(delayBlock(it));
+    } else if (it.kind === "recog") {
+      c.appendChild(recogBlock(it));
     } else { // text
       var input = el("input", "textin");
       var error = el("div", "input-error");
@@ -415,6 +477,101 @@
       }, 1000);
     });
     wrap.appendChild(disp); wrap.appendChild(note); wrap.appendChild(btn);
+    return wrap;
+  }
+
+  /* 主试专用词表面板：仅主试可见，受试者全程看不到（防泄题核心） */
+  function revealPanel(reveal) {
+    var wrap = el("div", "reveal-panel");
+    var head = el("div", "reveal-head");
+    head.appendChild(el("span", "reveal-title", "🔒 " + (reveal.title || "主试专用词表")));
+    var body = el("div", "reveal-body");
+    body.style.display = "none";
+    var toggle = bigBtn("显示词表", function () {
+      if (body.style.display === "none") { body.style.display = "block"; toggle.textContent = "隐藏词表"; }
+      else { body.style.display = "none"; toggle.textContent = "显示词表"; }
+    }, "secondary");
+    (reveal.words || []).forEach(function (w, i) {
+      body.appendChild(el("span", "reveal-word", (i + 1) + ". " + w));
+    });
+    head.appendChild(toggle);
+    wrap.appendChild(head); wrap.appendChild(body);
+    return wrap;
+  }
+
+  /* 主试评分锚点：结构化追问的评分依据 */
+  function anchorPanel(anchors) {
+    var wrap = el("div", "anchor-panel");
+    wrap.appendChild(el("div", "anchor-title", "评分锚点（主试参考）"));
+    Object.keys(anchors).map(Number).sort(function (a, b) { return a - b; }).forEach(function (k) {
+      var row = el("div", "anchor-row");
+      row.appendChild(el("span", "anchor-score", k + " 分"));
+      row.appendChild(el("span", "anchor-desc", anchors[k]));
+      wrap.appendChild(row);
+    });
+    return wrap;
+  }
+
+  /* 延迟回忆倒计时节点：临床约 20 分钟，演示用短倒计时代替；到点自动进入下一项 */
+  function delayBlock(it) {
+    var wrap = el("div", "delay-wrap");
+    var demo = it.demoSeconds || it.seconds;
+    var disp = el("div", "timerdisp", demo + "s");
+    var note = el("div", "hint", "延迟回忆前等待（临床约 " + Math.round(it.seconds / 60) +
+      " 分钟）。演示倒计时 " + demo + " 秒代替临床等待；期间可完成非言语任务（如画钟测验）。");
+    var start = bigBtn("▶ 开始等待计时", function () {
+      start.disabled = true; skip.disabled = true;
+      var left = demo;
+      disp.textContent = left + "s";
+      state._timer = setInterval(function () {
+        left--;
+        disp.textContent = left + "s";
+        if (left <= 10) disp.classList.add("warn");
+        if (left <= 0) {
+          clearInterval(state._timer); state._timer = null;
+          disp.textContent = "时间到！";
+          answer(it, 1, "等待结束·进入延迟回忆");
+        }
+      }, 1000);
+    });
+    var skip = bigBtn("⏭ 跳过等待（演示用）", function () {
+      if (state._timer) { clearInterval(state._timer); state._timer = null; }
+      answer(it, 1, "已跳过等待（演示）");
+    }, "secondary");
+    wrap.appendChild(disp); wrap.appendChild(note); wrap.appendChild(start); wrap.appendChild(skip);
+    return wrap;
+  }
+
+  /* 再认九宫格：目标词 + 干扰词混排，点选后统计正确数与假阳性 */
+  function recogBlock(it) {
+    var wrap = el("div", "recog-wrap");
+    var words = (it.targets || []).concat(it.distractors || []);
+    for (var i = words.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = words[i]; words[i] = words[j]; words[j] = tmp;
+    }
+    var selected = {};
+    var grid = el("div", "recog-grid");
+    var count = el("div", "hint", "已选 0 个");
+    words.forEach(function (w) {
+      var b = el("button", "recog-word", w);
+      b.type = "button";
+      b.onclick = function () {
+        if (selected[w]) { delete selected[w]; b.classList.remove("sel"); }
+        else { selected[w] = true; b.classList.add("sel"); }
+        count.textContent = "已选 " + Object.keys(selected).length + " 个";
+      };
+      grid.appendChild(b);
+    });
+    var confirm = bigBtn("✅ 确认再认", function () {
+      var hits = 0, fp = 0;
+      Object.keys(selected).forEach(function (w) {
+        if ((it.targets || []).indexOf(w) >= 0) hits++;
+        else if ((it.distractors || []).indexOf(w) >= 0) fp++;
+      });
+      answer(it, hits, "再认正确 " + hits + "/12（假阳性 " + fp + "）");
+    });
+    wrap.appendChild(count); wrap.appendChild(grid); wrap.appendChild(confirm);
     return wrap;
   }
 
@@ -551,15 +708,40 @@
       if (state.role === "self") {
         botSay("测验完成啦，您很棒！结果建议由医生进一步评估～", "green");
       } else {
+        var extra = "";
+        if (r.details) {
+          if (r.details.learning) {
+            var L = r.details.learning;
+            extra += " 学习曲线 " + L.t1 + "→" + L.t2 + "→" + L.t3 + "（累计 " + L.sum + "）词";
+          }
+          if (r.details.recog != null) extra += "；再认正确 " + r.details.recog + "/12";
+          if (r.details.segments) {
+            var S = r.details.segments;
+            extra += "；60秒总词数 " + r.details.total + "（分段 0-15:" + S[0] + "/16-30:" + S[1] + "/31-45:" + S[2] + "/46-60:" + S[3] + "）";
+          }
+          if (r.details.global != null) extra += "；CDR-SB " + r.details.sb + "，Global " + r.details.global + "（" + r.details.globalName + "）";
+        }
+        if (r.dimensions && Object.keys(r.dimensions).length) {
+          var dimText = Object.keys(r.dimensions).map(function (k) {
+            var d = r.dimensions[k];
+            return d.name + " " + d.score + "/" + d.max;
+          }).join(" · ");
+          extra += "\n【维度得分】" + dimText;
+        }
         botSay(s_title(state.flow) + who + " 总分 " + fmt(r.total) +
-               "。" + LIGHT[r.level] + " " + r.label, r.level);
+               "。" + LIGHT[r.level] + " " + r.label + extra, r.level);
       }
       // 记录结果
       if (state.patient) {
         var rec = state.patients.filter(function (p) { return p.patient.code === state.patient.code; })[0];
         if (rec) {
           rec.results = rec.results.filter(function (x) { return x.scale !== state.flow.short; });
-          rec.results.push({ scale: state.flow.short, name: state.flow.name, score: r.total, level: r.level, label: r.label, time: nowStr() });
+          rec.results.push({
+            scale: state.flow.short, name: state.flow.name, score: r.total, level: r.level,
+            label: r.label, time: nowStr(),
+            global: (r.details && r.details.global != null) ? r.details.global : null,
+            dimensions: r.dimensions
+          });
         }
       }
       state.scaleCompleted = true;
@@ -648,6 +830,7 @@
       if (state.patient) h.appendChild(bigBtn("📋 选择量表评估", showScaleMenu, "secondary"));
       h.appendChild(bigBtn("🩺 综合诊断报告", showReport, "secondary"));
       if (state.patients.length) h.appendChild(bigBtn("📤 导出 Excel", showExportMenu, "secondary"));
+      if (state.patients.length) h.appendChild(bigBtn("🗂 患者列表（管理）", showPatientList, "secondary"));
     } else if (state.channel === "self") {
       if (!state.patient) {
         h.appendChild(bigBtn("开始填写基础信息", startSubjectIntake, "primary guide"));
@@ -961,7 +1144,10 @@
     var head = "<tr>" +
       "<th>研究编号</th><th>姓名</th><th>性别</th><th>年龄</th><th>教育年限</th>" +
       "<th>身高</th><th>体重</th><th>婚姻</th><th>居住</th>";
-    keys.forEach(function (k) { head += "<th>" + window.SCALES[k].short + "(分)</th><th>" + window.SCALES[k].short + "(灯)</th>"; });
+    keys.forEach(function (k) {
+      head += "<th>" + window.SCALES[k].short + "(分)</th><th>" + window.SCALES[k].short + "(灯)</th>";
+      if (k === "CDR") head += "<th>CDR-Global</th>";
+    });
     head += "<th>评估时间</th></tr>";
     var rows = records.map(function (rec) {
       var p = rec.patient;
@@ -979,6 +1165,7 @@
       keys.forEach(function (k) {
         var r = map[k];
         t += "<td>" + escapeHtml(r ? r.score : "") + "</td><td>" + escapeHtml(r ? LIGHT[r.level] : "") + "</td>";
+        if (k === "CDR") t += "<td>" + escapeHtml(r && r.global != null ? r.global : "") + "</td>";
       });
       t += "<td>" + escapeHtml(p.time || "") + "</td></tr>";
       return t;
@@ -1085,6 +1272,14 @@
       item.innerHTML = "<span class='ri-name'>" + escapeHtml(r.name) + "</span>" +
         "<span class='ri-score'>" + escapeHtml(LIGHT[r.level]) + " 总分 " + escapeHtml(r.score) + "</span>" +
         "<span class='ri-label'>" + escapeHtml(r.label) + "</span>";
+      if (r.dimensions && Object.keys(r.dimensions).length) {
+        var dimLine = Object.keys(r.dimensions).map(function (k) {
+          var d = r.dimensions[k];
+          return escapeHtml(d.name) + " " + d.score + "/" + d.max;
+        }).join(" · ");
+        var dimNode = el("div", "ri-dims", "维度：" + dimLine);
+        item.appendChild(dimNode);
+      }
       list.appendChild(item);
     });
     body.appendChild(list);
@@ -1095,6 +1290,85 @@
       : (yellows > 0 ? "🟡 部分指标处于临界，建议随访观察。" : "🟢 已完成量表未见明显异常提示。");
     body.appendChild(el("div", "rep-overall", overall));
     body.appendChild(el("div", "rep-note", "* 本报告为筛查提示，不作诊断结论；最终判断由医师结合临床综合得出。"));
+    box.appendChild(body);
+    box.style.display = "flex";
+  }
+
+  /* ---------- 患者列表 / 管理者页 ---------- */
+  function showPatientList() {
+    var box = $("report");
+    box.innerHTML = "";
+    var hd = el("div", "rep-hd", "🗂 患者列表");
+    var close = el("button", "rep-close", "✕");
+    close.onclick = function () { box.style.display = "none"; };
+    hd.appendChild(close);
+    box.appendChild(hd);
+
+    var body = el("div", "rep-body");
+    if (!state.patients.length) {
+      body.appendChild(el("div", "rep-p", "暂无患者。请先在首页录入或导入患者档案。"));
+      box.appendChild(body);
+      box.style.display = "flex";
+      return;
+    }
+
+    var list = el("div", "patient-list");
+    state.patients.forEach(function (rec, i) {
+      var p = rec.patient;
+      var item = el("div", "patient-item");
+      var top = el("div", "patient-top");
+      top.appendChild(el("span", "patient-name", (p.name || "—") + "（" + (p.code || "—") + "）"));
+      top.appendChild(el("span", "patient-meta", "年龄 " + (p.age != null ? p.age : "—") + " · 教育 " + (p.edu != null ? p.edu + " 年" : "—")));
+      item.appendChild(top);
+
+      var counts = { red: 0, yellow: 0, green: 0 };
+      (rec.results || []).forEach(function (r) { counts[r.level] = (counts[r.level] || 0) + 1; });
+      var tags = el("div", "patient-tags");
+      tags.appendChild(el("span", "tag-scales", "已完成 " + (rec.results || []).length + " 个量表"));
+      if (counts.red) tags.appendChild(el("span", "tag-red", "🔴 异常 " + counts.red));
+      if (counts.yellow) tags.appendChild(el("span", "tag-yellow", "🟡 临界 " + counts.yellow));
+      if (!counts.red && !counts.yellow) tags.appendChild(el("span", "tag-green", "🟢 未见异常"));
+      item.appendChild(tags);
+
+      var actions = el("div", "patient-actions");
+      var sel = el("button", "", "选择管理");
+      sel.type = "button";
+      sel.onclick = function () {
+        state.patient = p;
+        save();
+        box.style.display = "none";
+        goHome();
+      };
+      var rep = el("button", "", "查看报告");
+      rep.type = "button";
+      rep.onclick = function () {
+        state.patient = p;
+        save();
+        showReport();
+      };
+      var exp = el("button", "", "导出该患者");
+      exp.type = "button";
+      exp.onclick = function () {
+        state.patient = p;
+        save();
+        doExport([rec]);
+      };
+      var del = el("button", "danger", "删除");
+      del.type = "button";
+      del.onclick = function () {
+        if (!confirm("确定删除「" + (p.name || p.code) + "」的全部记录？此操作不可撤销。")) return;
+        state.patients.splice(i, 1);
+        if (state.patient && state.patient.code === p.code) state.patient = null;
+        save();
+        showPatientList();
+      };
+      actions.appendChild(sel); actions.appendChild(rep); actions.appendChild(exp); actions.appendChild(del);
+      item.appendChild(actions);
+      list.appendChild(item);
+    });
+
+    body.appendChild(el("div", "rep-p", "共 " + state.patients.length + " 位受试者。点击下方「选择管理」可将某位设为当前患者，回到首页继续评估或导出。"));
+    body.appendChild(list);
     box.appendChild(body);
     box.style.display = "flex";
   }
