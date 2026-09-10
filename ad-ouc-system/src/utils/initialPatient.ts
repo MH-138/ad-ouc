@@ -1,0 +1,687 @@
+import { SubjectRecord } from "../types/assessment";
+
+export function createDefaultSubjectRecord(name = "新受试者"): SubjectRecord {
+  const today = new Date().toISOString().split("T")[0];
+  const nextYear = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().split("T")[0];
+
+  return {
+    id: "sub-" + Date.now(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    protocolNo: "IC4-05023-096-CHN",
+    centerNo: "01",
+    visitCode: "W000 (入选)",
+    subjectNo: "01-" + Math.floor(1000 + Math.random() * 9000),
+    evaluator: "韩璎",
+    evalDate: today,
+
+    demographics: {
+      name,
+      idCard: "",
+      address: "北京市西城区宣武门内大街",
+      gender: 1,
+      age: 65,
+      birthDate: "1961-05-15",
+      height: 168,
+      weight: 66,
+      educationYears: 12,
+      occupation: 1,
+      workNature: 1,
+      maritalStatus: 1,
+      socialSupport: {
+        livingAlone: 2,
+        coResidents: [1, 2],
+        hasSiblings: 2,
+        closeFriends: 3,
+        neighborRelation: 3,
+      },
+      phone1: "",
+      phone2: "",
+      wechat: "",
+      caseSource: 2,
+    },
+
+    history: {
+      cerebrovascular: { has: false },
+      hypertension: { has: true, years: 5, regularMed: true, maxBp: "150/95", usualBp: "130/80", stable: true },
+      diabetes: { has: false },
+      coronaryHeartDisease: { has: false },
+      hyperlipidemia: { has: true, years: 3, regularMed: true, stable: true },
+      anemia: { has: false },
+      coPoisoning: { has: false },
+      generalAnesthesia: { has: false },
+      thyroidAbnormality: { has: false },
+      tbi: { has: false },
+      familyHistoryDementia: { has: false, firstDegreeCount: 0, secondDegreeCount: 0 },
+      mriContraindications: false,
+    },
+
+    personalHistory: {
+      smoking: { has: false },
+      drinking: { has: false },
+      dietHabits: {
+        preference: 3,
+        drinkAlcoholFreq: 5,
+        drinkTeaFreq: 2,
+        drinkCoffeeFreq: 4,
+        eatFishFreq: 2,
+      },
+    },
+
+    scdQ9: {
+      q1: 1,
+      q2: 1,
+      q3: 1,
+      q4: 0.5,
+      q5: 0.5,
+      q6: 1,
+      q7: 0.5,
+      q8: 1,
+      q9: 1,
+    },
+
+    scdInterview: {
+      selfAreas: {
+        memory: true,
+        language: false,
+        organization: false,
+        attention: false,
+        other: false,
+      },
+      detailedQuestions: {
+        q1: { has: true, worry: 1, onset: 2, worseThanPeers: 1, consultedDoctor: 1, firstConsultMonthsAgo: 3 },
+        q2: { has: false },
+        q3: { has: false },
+        q4: { has: false },
+        q5: { has: false },
+      },
+      informant: {
+        hasInformant: true,
+        relation: 1,
+        q1Memory: { has: true, onset: 2 },
+        q2WordFinding: { has: false },
+        q3Planning: { has: false },
+        q4Attention: { has: false },
+        q5Other: { has: false },
+        q6Personality: { has: false },
+      },
+      additional: {
+        otherKnownCause: false,
+        hasFluctuation: false,
+        onsetForm: 3,
+        progression: 3,
+      },
+    },
+
+    presentIllness: {
+      chiefComplaint: "自感近1-2年记忆力轻度下降，偶有丢三落四",
+      cognitiveDeficitDesc: "能独立料理家务，但时常因找钥匙、记人名发生短时遗忘，自感有担忧。",
+      bpsdDesc: "无明显精神行为异常与妄想幻觉，情绪稍显焦虑。",
+    },
+
+    labTests: {
+      syphilis: 2,
+      homocysteine: 2,
+      folateDeficiency: 2,
+      vitB12Low: 2,
+      thyroidAbnormal: 2,
+      hemoglobinLow: 2,
+    },
+
+    scales: {
+      handedness: {
+        tasks: {
+          writing: { left: 0, right: 2 },
+          drawing: { left: 0, right: 2 },
+          throwing: { left: 0, right: 2 },
+          scissors: { left: 0, right: 2 },
+          brushing: { left: 0, right: 2 },
+          knife: { left: 0, right: 2 },
+          spoon: { left: 0, right: 2 },
+          comb: { left: 0, right: 2 },
+          match: { left: 0, right: 2 },
+          bottleCap: { left: 0, right: 2 },
+        },
+      },
+      mmse: {
+        items: {
+          "2.1": 1, "2.2": 1, "2.3": 1, "2.4": 1, "2.5": 1,
+          "2.6": 1, "2.7": 1, "2.8": 1, "2.9": 1, "2.10": 1,
+          "2.11": 1, "2.12": 1, "2.13": 1,
+          "2.14": 1, "2.15": 1, "2.16": 1, "2.17": 1, "2.18": 1,
+          "2.19": 1, "2.20": 1, "2.21": 1,
+          "2.22": 1, "2.23": 1, "2.24": 1, "2.25": 1,
+          "2.26": 1, "2.27": 1, "2.28": 1, "2.29": 1, "2.30": 1,
+        },
+      },
+      avltH: {
+        n1Words: ["大衣", "司机", "海棠", "木工", "长裤", "百合"],
+        n2Words: ["大衣", "司机", "海棠", "木工", "长裤", "百合", "头巾", "腊梅"],
+        n3Words: ["大衣", "司机", "海棠", "木工", "长裤", "百合", "头巾", "腊梅", "士兵", "玉兰"],
+        n4Delayed5MinWords: ["大衣", "海棠", "长裤", "百合", "腊梅", "玉兰"],
+        n5Delayed20MinWords: ["大衣", "海棠", "长裤", "百合", "腊梅"],
+        n6CategoryCued: {
+          flowers: ["海棠", "百合", "腊梅", "玉兰"],
+          occupations: ["司机", "木工", "士兵"],
+          clothing: ["大衣", "长裤", "头巾"],
+        },
+        n7RecognitionErrors: 2,
+      },
+      vft: {
+        category: "animal",
+        t1_15s: 5,
+        t16_30s: 4,
+        t31_45s: 3,
+        t46_60s: 3,
+        wordsList: "狗、猫、牛、羊、马、老虎、狮子、大象、兔子、猴子、鸡、鸭、鱼、猪、狼",
+      },
+      bnt: {
+        items: {
+          2: { spontaneous: true },
+          3: { spontaneous: true },
+          6: { spontaneous: true },
+          8: { spontaneous: true },
+          9: { spontaneous: true },
+          12: { spontaneous: true },
+          14: { spontaneous: true },
+          15: { spontaneous: true },
+          16: { spontaneous: true },
+          17: { spontaneous: true },
+          21: { spontaneous: true },
+          22: { spontaneous: true },
+          24: { spontaneous: true },
+          25: { spontaneous: true },
+          30: { spontaneous: true },
+          31: { spontaneous: true },
+          33: { spontaneous: true },
+          36: { spontaneous: true },
+          37: { spontaneous: true },
+          38: { spontaneous: true },
+          42: { spontaneous: true },
+          43: { spontaneous: true },
+          46: { spontaneous: true },
+          47: { spontaneous: true },
+          50: { spontaneous: true },
+          52: { spontaneous: true },
+          54: { spontaneous: true },
+          57: { spontaneous: true },
+          59: { spontaneous: true },
+          60: { spontaneous: true },
+        },
+      },
+      stt: {
+        sttAPracticeSeconds: 15,
+        sttATestSeconds: 52,
+        sttBPracticeSeconds: 30,
+        sttBTestSeconds: 140,
+        sttAPrompts: 0,
+        sttBPrompts: 1,
+      },
+      logicalMemory: {
+        immediateStoryUnits: 14,
+        immediateThemeUnits: 12,
+        delayed30MinStoryUnits: 9,
+        delayed30MinThemeUnits: 8,
+      },
+      gds15: {
+        answers: {
+          1: true,
+          2: false,
+          3: false,
+          4: false,
+          5: true,
+          6: false,
+          7: true,
+          8: false,
+          9: false,
+          10: true,
+          11: true,
+          12: false,
+          13: true,
+          14: false,
+          15: false,
+        },
+      },
+      mes: {
+        q1ImmediateSentence: 9,
+        q2KitchenFluency: 8,
+        q3TappingContradiction: 10,
+        q4ShortDelay: 8,
+        q5FingerMotorPraxis: 18,
+        q6TappingGoNoGo: 10,
+        q7LongDelay: 8,
+      },
+      faq: {
+        informantPresent: true,
+        informantRelation: "老伴",
+        items: {
+          1: 0, 2: 0, 3: 0, 4: 0, 5: 0,
+          6: 0, 7: 0, 8: 0, 9: 0, 10: 0,
+        },
+      },
+      npi: {
+        items: {
+          1: { has: false },
+          2: { has: false },
+          3: { has: false },
+          4: { has: false },
+          5: { has: true, frequency: 2, severity: 1, distress: 1 },
+          6: { has: false },
+          7: { has: false },
+          8: { has: false },
+          9: { has: false },
+          10: { has: false },
+          11: { has: false },
+          12: { has: false },
+        },
+      },
+      ecog: {
+        items: {
+          1: 2, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1,
+          7: 1, 8: 1, 9: 1, 10: 1, 11: 1, 12: 1,
+        },
+      },
+      psqi: {
+        bedTime: "22:30",
+        sleepLatencyMinutes: 20,
+        wakeTime: "06:30",
+        actualSleepHours: 7,
+        troubles: { a: 1, b: 1, c: 1, d: 0, e: 0, f: 0, g: 0, h: 0, i: 0, j: 0 },
+        selfQuality: 1,
+        medication: 0,
+        daytimeDysfunction: 0,
+      },
+      rbdsq: {
+        items: {
+          q1: false, q2: false, q3: false, q4: false, q5: false,
+          q6_1: false, q6_2: false, q6_3: false, q6_4: false,
+          q7: false, q8: false, q9: false, q10: false,
+        },
+      },
+      ess: {
+        items: {
+          1: 0, 2: 1, 3: 0, 4: 0, 5: 1, 6: 0, 7: 0, 8: 0,
+        },
+      },
+      mocaB: {
+        executiveTrail: 1,
+        immediateRecall: 5,
+        fluencyFruit: 2,
+        orientation: 6,
+        calculation13Yuan: 3,
+        abstraction: 3,
+        delayedRecall: 4,
+        visualPerception10Obj: 3,
+        naming4Animals: 4,
+        attentionDigitsWhite: 1,
+        attentionDigitsBlack: 2,
+      },
+      vignettes: {
+        cognitive1ZhangLiang: 2,
+        cognitive3LiuJun: 2,
+        cognitive4LiWei: 3,
+        mood1TangJing: 2,
+        mood2LiFeng: 2,
+        mood3ZhengBo: 4,
+      },
+      hamd17: {
+        items: {
+          1: 1, 2: 0, 3: 0, 4: 1, 5: 0, 6: 0, 7: 0, 8: 0, 9: 1, 10: 0,
+          11: 0, 12: 0, 13: 0, 14: 0, 15: 0, 16: 0, 17: 0,
+        },
+      },
+      hama: {
+        items: {
+          1: 1, 2: 1, 3: 0, 4: 1, 5: 1, 6: 0, 7: 0, 8: 0, 9: 0, 10: 0,
+          11: 0, 12: 0, 13: 0, 14: 0,
+        },
+      },
+      adasCog: {
+        wordRecallErrorsTrial1: 3,
+        wordRecallErrorsTrial2: 2,
+        wordRecallErrorsTrial3: 1,
+        namingErrors: 0,
+        commandsErrors: 0,
+        constructionalPraxisErrors: 0,
+        ideationalPraxisErrors: 0,
+        orientationErrors: 0,
+        wordRecognitionErrorsTrial1: 1,
+        wordRecognitionErrorsTrial2: 1,
+        wordRecognitionErrorsTrial3: 0,
+        rememberingInstructions: 0,
+        spokenLanguageAbility: 0,
+        wordFindingDifficulty: 0,
+        comprehensionDifficulty: 0,
+        concentrationDifficulty: 0,
+      },
+      cdr: {
+        memory: 0,
+        orientation: 0,
+        judgment: 0,
+        community: 0,
+        homeHobbies: 0,
+        personalCare: 0,
+      },
+    },
+
+    biomarkers: {
+      mriPerformed: true,
+      hippocampalAtrophy: false,
+      frontotemporalAtrophy: false,
+      abetaPet: 2,
+      tauPet: 2,
+      csfAbetaTau: false,
+      urineAdTest: false,
+      apoe4Genotype: {
+        tested: true,
+        value: "ε3/ε3",
+      },
+      plasmaAdBiomarkers: {
+        tested: true,
+        pTau217Value: "0.12 pg/mL (正常范围)",
+      },
+    },
+
+    diagnosis: {
+      category: 1, // SCD
+      notes: "符合SCD国际工作组及宣武医院SCD多中心入组标准：存在主观记忆减退主诉且自感担忧，客观认知量表测试MMSE/MoCA及CDR评分在同龄及受教育年限正常范围内，日常生活能力独立完整。",
+    },
+
+    followUp: {
+      nextVisitDate: nextYear,
+      evaluatorSignature: "韩璎",
+    },
+  };
+}
+
+export const createDefaultPatient = createDefaultSubjectRecord;
+
+export const TYPICAL_SCD_PRESET: SubjectRecord = {
+  ...createDefaultSubjectRecord("张建华 (典型SCD)"),
+  id: "sub-scd-001",
+  subjectNo: "SCD-2026-001",
+  demographics: {
+    ...createDefaultSubjectRecord().demographics,
+    name: "张建华",
+    gender: 1,
+    age: 71,
+    educationYears: 12,
+  },
+};
+
+export const EARLY_MCI_PRESET: SubjectRecord = {
+  ...createDefaultSubjectRecord("李富民 (早期aMCI)"),
+  id: "sub-mci-002",
+  subjectNo: "MCI-2026-002",
+  demographics: {
+    ...createDefaultSubjectRecord().demographics,
+    name: "李富民",
+    gender: 1,
+    age: 73,
+    educationYears: 9,
+  },
+  scdQ9: {
+    ...createDefaultSubjectRecord().scdQ9,
+    q1: 1,
+    q2: 1,
+    q3: 1,
+    q4: 1,
+    q5: 1,
+    q6: 1,
+    q7: 1,
+    q8: 1,
+    q9: 0,
+  },
+  scales: {
+    ...createDefaultSubjectRecord().scales,
+    mmse: {
+      items: {
+        "2.1": 1, "2.2": 1, "2.3": 1, "2.4": 1, "2.5": 1,
+        "2.6": 1, "2.7": 1, "2.8": 1, "2.9": 1, "2.10": 1,
+        "2.11": 1, "2.12": 1, "2.13": 1,
+        "2.14": 1, "2.15": 1, "2.16": 1, "2.17": 0, "2.18": 0,
+        "2.19": 0, "2.20": 0, "2.21": 0,
+        "2.22": 1, "2.23": 1, "2.24": 1, "2.25": 1, "2.26": 1, "2.27": 1, "2.28": 1, "2.29": 1, "2.30": 1,
+      },
+    },
+    mocaB: {
+      ...createDefaultSubjectRecord().scales.mocaB,
+      delayedRecall: 1,
+      calculation13Yuan: 2,
+      abstraction: 1,
+    },
+    avltH: {
+      ...createDefaultSubjectRecord().scales.avltH,
+      n1Words: ["大衣", "海棠"],
+      n2Words: ["大衣", "海棠", "长裤"],
+      n3Words: ["大衣", "海棠", "长裤", "司机"],
+      n4Delayed5MinWords: ["大衣", "海棠"],
+      n5Delayed20MinWords: ["海棠", "大衣"],
+      n7RecognitionErrors: 6,
+    },
+    cdr: {
+      memory: 0.5,
+      orientation: 0.5,
+      judgment: 0,
+      community: 0,
+      homeHobbies: 0,
+      personalCare: 0,
+    },
+    faq: {
+      ...createDefaultSubjectRecord().scales.faq,
+      items: {
+        1: 0, 2: 1, 3: 0, 4: 1, 5: 0, 6: 1, 7: 0, 8: 1, 9: 0, 10: 0,
+      },
+    },
+  },
+  biomarkers: {
+    ...createDefaultSubjectRecord().biomarkers,
+    hippocampalAtrophy: true,
+    hippocampalSeverity: 2,
+    abetaPet: 1,
+    apoe4Genotype: {
+      tested: true,
+      value: "ε3/ε4",
+    },
+  },
+  diagnosis: {
+    category: 2, // aMCI
+    notes: "主诉近1年记忆力明显衰退，客观听觉词表延迟回忆(2个)与MoCA认知测试均落后于同龄常模(-1.5SD)，CDR=0.5分，日常生活能力基本保持独立(FAQ 4分)，伴海马萎缩及Aβ-PET阳性，符合遗忘型轻度认知障碍(aMCI)。",
+  },
+};
+
+export const HEALTHY_CONTROL_PRESET: SubjectRecord = {
+  ...createDefaultSubjectRecord("陈素芳 (健康对照 NC)"),
+  id: "sub-nc-003",
+  subjectNo: "NC-2026-003",
+  demographics: {
+    ...createDefaultSubjectRecord().demographics,
+    name: "陈素芳",
+    gender: 2,
+    age: 68,
+    educationYears: 15,
+  },
+  scdQ9: {
+    q1: 0, q2: 0, q3: 0, q4: 0, q5: 0, q6: 0, q7: 1, q8: 0, q9: 0,
+  },
+  scales: {
+    ...createDefaultSubjectRecord().scales,
+    avltH: {
+      ...createDefaultSubjectRecord().scales.avltH,
+      n1Words: ["大衣", "司机", "海棠", "木工", "长裤"],
+      n2Words: ["大衣", "司机", "海棠", "木工", "长裤", "百合", "头巾", "腊梅"],
+      n3Words: ["大衣", "司机", "海棠", "木工", "长裤", "百合", "头巾", "腊梅", "士兵", "玉兰"],
+      n4Delayed5MinWords: ["大衣", "司机", "海棠", "木工", "长裤", "百合", "头巾", "腊梅"],
+      n5Delayed20MinWords: ["大衣", "司机", "海棠", "木工", "长裤", "百合", "头巾", "腊梅"],
+      n7RecognitionErrors: 0,
+    },
+    cdr: {
+      memory: 0, orientation: 0, judgment: 0, community: 0, homeHobbies: 0, personalCare: 0,
+    },
+  },
+  diagnosis: {
+    category: 4, // NC
+    notes: "神经心理量表测试与日常功能均在正常高限，无主观认知下降及情绪睡眠障碍，为健康正常老年对照。",
+  },
+};
+
+export const DEFAULT_COHORT: SubjectRecord[] = [
+  TYPICAL_SCD_PRESET,
+  EARLY_MCI_PRESET,
+  HEALTHY_CONTROL_PRESET,
+];
+
+export function createEmptySubjectRecord(name = "", subjectNo = ""): SubjectRecord {
+  const today = new Date().toISOString().split("T")[0];
+  const nextYear = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().split("T")[0];
+  return {
+    id: "sub-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    protocolNo: "IC4-05023-096-CHN",
+    centerNo: "01",
+    visitCode: "W000",
+    subjectNo: subjectNo || ("01-" + Math.floor(1000 + Math.random() * 9000)),
+    evaluator: "评估医生",
+    evalDate: today,
+    demographics: {
+      name,
+      idCard: "",
+      address: "",
+      gender: 1,
+      age: 65,
+      birthDate: "",
+      height: 165,
+      weight: 60,
+      educationYears: 9,
+      occupation: 1,
+      workNature: 1,
+      maritalStatus: 1,
+      socialSupport: {
+        livingAlone: 2,
+        coResidents: [],
+        hasSiblings: 2,
+        closeFriends: 1,
+        neighborRelation: 1,
+      },
+      phone1: "",
+      phone2: "",
+      wechat: "",
+      caseSource: 1,
+    },
+    history: {
+      cerebrovascular: { has: false },
+      hypertension: { has: false },
+      diabetes: { has: false },
+      coronaryHeartDisease: { has: false },
+      hyperlipidemia: { has: false },
+      anemia: { has: false },
+      coPoisoning: { has: false },
+      generalAnesthesia: { has: false },
+      thyroidAbnormality: { has: false },
+      tbi: { has: false },
+      familyHistoryDementia: { has: false, firstDegreeCount: 0, secondDegreeCount: 0 },
+      mriContraindications: false,
+    },
+    personalHistory: {
+      smoking: { has: false },
+      drinking: { has: false },
+      dietHabits: {
+        preference: 1,
+        drinkAlcoholFreq: 5,
+        drinkTeaFreq: 5,
+        drinkCoffeeFreq: 5,
+        eatFishFreq: 5,
+      },
+    },
+    scdQ9: {} as any,
+    scdInterview: {
+      selfAreas: {
+        memory: false,
+        language: false,
+        organization: false,
+        attention: false,
+        other: false,
+      },
+      detailedQuestions: {} as any,
+      informant: {
+        hasInformant: false,
+      } as any,
+      additional: {
+        otherKnownCause: false,
+        hasFluctuation: false,
+        onsetForm: 3,
+        progression: 3,
+      },
+    },
+    presentIllness: {
+      chiefComplaint: "",
+      cognitiveDeficitDesc: "",
+      bpsdDesc: "",
+    },
+    labTests: {
+      syphilis: 3,
+      homocysteine: 3,
+      folateDeficiency: 3,
+      vitB12Low: 3,
+      thyroidAbnormal: 3,
+      hemoglobinLow: 3,
+    },
+    scales: {
+      handedness: { tasks: {} },
+      mmse: { items: {} },
+      mocaB: {} as any,
+      avltH: {
+        n1Words: [],
+        n2Words: [],
+        n3Words: [],
+        n4Delayed5MinWords: [],
+        n5Delayed20MinWords: [],
+        n6CategoryCued: { flowers: [], occupations: [], clothing: [] },
+        n7RecognitionErrors: 0,
+      },
+      vft: { category: "animal", t1_15s: 0, t16_30s: 0, t31_45s: 0, t46_60s: 0 },
+      bnt: { items: {} },
+      stt: { sttAPracticeSeconds: 0, sttATestSeconds: 0, sttBPracticeSeconds: 0, sttBTestSeconds: 0 },
+      logicalMemory: { immediateStoryUnits: 0, immediateThemeUnits: 0, delayed30MinStoryUnits: 0, delayed30MinThemeUnits: 0 },
+      gds15: { answers: {} },
+      mes: { q1ImmediateSentence: 0, q2KitchenFluency: 0, q3TappingContradiction: 0, q4ShortDelay: 0, q5FingerMotorPraxis: 0, q6TappingGoNoGo: 0, q7LongDelay: 0 },
+      faq: { informantPresent: false, items: {} },
+      npi: { items: {} },
+      ecog: { items: {} },
+      psqi: {} as any,
+      rbdsq: { items: {} },
+      ess: { items: {} },
+      vignettes: {} as any,
+      hamd17: { items: {} },
+      hama: { items: {} },
+      adasCog: {} as any,
+      cdr: {} as any,
+    },
+    biomarkers: {
+      mriPerformed: false,
+      hippocampalAtrophy: false,
+      frontotemporalAtrophy: false,
+      abetaPet: 3,
+      tauPet: 3,
+      csfAbetaTau: false,
+      urineAdTest: false,
+      apoe4Genotype: {
+        tested: false,
+      },
+      plasmaAdBiomarkers: {
+        tested: false,
+      },
+    },
+    diagnosis: {
+      category: 1,
+      notes: "",
+    },
+    followUp: {
+      nextVisitDate: nextYear,
+      evaluatorSignature: "",
+    },
+  };
+}
+
+
