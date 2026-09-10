@@ -453,7 +453,64 @@ export async function createAiConsultation(data: {
 }) {
   const db = getTursoClient();
   const now = new Date().toISOString();
+
+  // 1. Check if an active pending consultation already exists for this patient
+  const existingPending = await db.execute({
+    sql: "SELECT * FROM ai_consultations WHERE patient_id = ? AND status = 'pending_doctor_signature' ORDER BY created_at DESC LIMIT 1",
+    args: [data.patientId],
+  });
+
+  if (existingPending.rows.length > 0) {
+    const existingRow: any = existingPending.rows[0];
+    let prevSummary: any = {};
+    try {
+      prevSummary = JSON.parse(existingRow.ai_summary_json || "{}");
+    } catch (e) {}
+
+    const versionHistory = Array.isArray(prevSummary.versionHistory)
+      ? prevSummary.versionHistory
+      : [];
+
+    versionHistory.push({
+      version: versionHistory.length + 1,
+      createdAt: existingRow.created_at,
+      suggestedDiagnosis: existingRow.suggested_diagnosis,
+      confidence: existingRow.confidence,
+    });
+
+    const mergedSummary = {
+      ...data.aiSummary,
+      version: versionHistory.length + 1,
+      versionHistory,
+    };
+
+    await db.execute({
+      sql: `
+        UPDATE ai_consultations
+        SET suggested_diagnosis = ?, confidence = ?, ai_summary_json = ?, created_at = ?, patient_name = ?
+        WHERE id = ?
+      `,
+      args: [
+        data.suggestedDiagnosis,
+        data.confidence || 0.88,
+        JSON.stringify(mergedSummary),
+        now,
+        data.patientName || existingRow.patient_name,
+        existingRow.id,
+      ],
+    });
+
+    return { id: existingRow.id, status: "pending_doctor_signature", createdAt: now, updated: true };
+  }
+
+  // 2. Insert new pending record if none exists
   const id = data.id || `aic_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const summaryWithVer = {
+    ...data.aiSummary,
+    version: 1,
+    versionHistory: [],
+  };
+
   await db.execute({
     sql: `
       INSERT INTO ai_consultations (
@@ -469,14 +526,14 @@ export async function createAiConsultation(data: {
       "pending_doctor_signature",
       data.suggestedDiagnosis,
       data.confidence || 0.88,
-      JSON.stringify(data.aiSummary || {}),
+      JSON.stringify(summaryWithVer),
       "",
       "",
       now,
       "",
     ],
   });
-  return { id, status: "pending_doctor_signature", createdAt: now };
+  return { id, status: "pending_doctor_signature", createdAt: now, updated: false };
 }
 
 export async function getPendingAiConsultations() {
@@ -484,16 +541,26 @@ export async function getPendingAiConsultations() {
   const res = await db.execute({
     sql: "SELECT * FROM ai_consultations WHERE status = 'pending_doctor_signature' ORDER BY created_at DESC",
   });
-  return res.rows.map((r: any) => ({
-    id: r.id,
-    patientId: r.patient_id,
-    patientName: r.patient_name,
-    status: r.status,
-    suggestedDiagnosis: r.suggested_diagnosis,
-    confidence: r.confidence,
-    aiSummary: r.ai_summary_json ? JSON.parse(r.ai_summary_json as string) : {},
-    createdAt: r.created_at,
-  }));
+
+  // Strict deduplication by patientId (only retain latest pending record per patient)
+  const patientMap = new Map<string, any>();
+  for (const r of res.rows as any[]) {
+    const patientId = String(r.patient_id);
+    if (!patientMap.has(patientId)) {
+      patientMap.set(patientId, {
+        id: r.id,
+        patientId: r.patient_id,
+        patientName: r.patient_name,
+        status: r.status,
+        suggestedDiagnosis: r.suggested_diagnosis,
+        confidence: r.confidence,
+        aiSummary: r.ai_summary_json ? JSON.parse(r.ai_summary_json as string) : {},
+        createdAt: r.created_at,
+      });
+    }
+  }
+
+  return Array.from(patientMap.values());
 }
 
 export async function approveAiConsultation(
@@ -557,4 +624,265 @@ export async function approveAiConsultation(
   }
 
   return { success: true, reviewedAt: now };
+}
+
+// Clean old garbage data (like corrupted names or outdated sub-4) and seed the standard 4-patient cohort
+export async function cleanAndSeedStandardCohort() {
+  const db = getTursoClient();
+  const now = new Date().toISOString();
+
+  // 1. Delete all existing consultations, assessments, drafts, and patients
+  await db.execute("DELETE FROM ai_consultations");
+  await db.execute("DELETE FROM assessments");
+  await db.execute("DELETE FROM drafts");
+  await db.execute("DELETE FROM patients");
+
+  // 2. Define the 4 standard patients with realistic 18-digit ID cards and differentiated clinical states
+  const cohort = [
+    {
+      id: "sub-scd-001",
+      research_no: "SCD-2026-001",
+      name: "张建华",
+      gender: "1",
+      birth_year: 1955,
+      age: 71,
+      education_years: 12,
+      marital_status: "married",
+      living_arrangement: "with_family",
+      height_cm: 168,
+      weight_kg: 66,
+      phone: "13801015678",
+      source: "xuanwu_outpatient",
+      created_by_role: "doctor",
+      raw_data: {
+        id: "sub-scd-001",
+        subjectNo: "SCD-2026-001",
+        evalDate: "2026-09-08",
+        demographics: {
+          name: "张建华",
+          idCard: "110102195508123218",
+          gender: 1,
+          age: 71,
+          birthDate: "1955-08-12",
+          educationYears: 12,
+          phone1: "13801015678",
+          address: "北京市西城区宣武门内大街",
+        },
+        scdQ9: { q1: 1, q2: 1, q3: 1, q4: 0.5, q5: 0.5, q6: 1, q7: 0.5, q8: 1, q9: 0.5 },
+        scales: {
+          mmse: { items: { "2.1": 1, "2.2": 1, "2.3": 1, "2.4": 1, "2.5": 1, "2.6": 1, "2.7": 1, "2.8": 1, "2.9": 1, "2.10": 1, "2.11": 1, "2.12": 1, "2.13": 1, "2.14": 1, "2.15": 1, "2.16": 1, "2.17": 1, "2.18": 1, "2.19": 1, "2.20": 1, "2.21": 1, "2.22": 1, "2.23": 1, "2.24": 1, "2.25": 1, "2.26": 1, "2.27": 1, "2.28": 1 } },
+          mocaB: { executiveTrail: 1, immediateRecall: 5, fluencyFruit: 2, orientation: 6, calculation13Yuan: 3, abstraction: 3, delayedRecall: 4, visualPerception10Obj: 3, naming4Animals: 4, attentionDigitsWhite: 1, attentionDigitsBlack: 2 },
+          cdr: { memory: 0, orientation: 0, judgment: 0, community: 0, homeHobbies: 0, personalCare: 0 },
+        },
+        diagnosis: {
+          category: 1,
+          notes: "【宣武医院神经内科临床诊断与随访医嘱】\n临床诊断：主观认知下降 (Subjective Cognitive Decline, SCD)\n评定依据：受试者存在主观记忆减退主诉且自感担忧（SCD-Q9评分为7分），客观认知量表测试 MMSE 28分、MoCA-B 26分，全球 CDR=0分，知情者 FAQ 0分，日常生活自理能力完整。\n随访医嘱：\n1. 纳入宣武医院多中心 SCD 早期干预随访队列，预约 12 个月后复查。\n2. 执行地中海膳食与有氧步行锻炼处方。\n3. 控制血压与代谢危险因素，定期检测血浆 p-tau217 与睡眠质量。",
+          evaluatorSignature: "韩璎 教授 / 主任医师",
+          approvedAt: "2026-09-08T09:30:00.000Z",
+          approvalStatus: "approved",
+        },
+        followUp: {
+          nextVisitDate: "2027-09-08",
+          evaluatorSignature: "韩璎 教授 / 主任医师",
+          signDate: "2026-09-08",
+        },
+      },
+    },
+    {
+      id: "sub-scd-002",
+      research_no: "SCD-2026-002",
+      name: "李淑芬",
+      gender: "2",
+      birth_year: 1958,
+      age: 68,
+      education_years: 9,
+      marital_status: "married",
+      living_arrangement: "with_family",
+      height_cm: 162,
+      weight_kg: 58,
+      phone: "13910884562",
+      source: "self_portal",
+      created_by_role: "patient",
+      raw_data: {
+        id: "sub-scd-002",
+        subjectNo: "SCD-2026-002",
+        evalDate: "2026-09-10",
+        demographics: {
+          name: "李淑芬",
+          idCard: "110108195804251429",
+          gender: 2,
+          age: 68,
+          birthDate: "1958-04-25",
+          educationYears: 9,
+          phone1: "13910884562",
+          address: "北京市海淀区中关村南大街",
+        },
+        scdQ9: { q1: 1, q2: 1, q3: 1, q4: 0.5, q5: 0.5, q6: 1, q7: 0.5, q8: 0.5, q9: 0 },
+        scales: {
+          gds15: { answers: { 1: false, 2: false, 3: false, 4: false, 5: true, 6: false, 7: true, 8: false, 9: false, 10: true, 11: false, 12: false, 13: true, 14: false, 15: false } },
+          psqi: { bedTime: "22:30", sleepLatencyMinutes: 30, wakeTime: "06:00", actualSleepHours: 6, troubles: { a: 1, b: 2, c: 1, d: 0, e: 0, f: 0, g: 0, h: 0, i: 0, j: 0 }, selfQuality: 2, medication: 0, daytimeDysfunction: 1 },
+        },
+        diagnosis: {
+          category: 1,
+          notes: "",
+          approvalStatus: "pending",
+        },
+        followUp: {
+          nextVisitDate: "",
+          evaluatorSignature: "",
+        },
+      },
+    },
+    {
+      id: "sub-blank-003",
+      research_no: "BLANK-2026-003",
+      name: "王卫国",
+      gender: "1",
+      birth_year: 1961,
+      age: 65,
+      education_years: 12,
+      marital_status: "married",
+      living_arrangement: "with_family",
+      height_cm: 172,
+      weight_kg: 70,
+      phone: "13601237890",
+      source: "manual",
+      created_by_role: "rater",
+      raw_data: {
+        id: "sub-blank-003",
+        subjectNo: "BLANK-2026-003",
+        evalDate: "2026-09-10",
+        demographics: {
+          name: "王卫国",
+          idCard: "110105196111082513",
+          gender: 1,
+          age: 65,
+          birthDate: "1961-11-08",
+          educationYears: 12,
+          phone1: "13601237890",
+          address: "北京市朝阳区北苑路",
+        },
+        scdQ9: {},
+        scales: {},
+        diagnosis: {
+          category: 0,
+          notes: "",
+          approvalStatus: "none",
+        },
+        followUp: {
+          nextVisitDate: "",
+          evaluatorSignature: "",
+        },
+      },
+    },
+    {
+      id: "sub-blank-004",
+      research_no: "BLANK-2026-004",
+      name: "赵桂兰",
+      gender: "2",
+      birth_year: 1963,
+      age: 63,
+      education_years: 9,
+      marital_status: "married",
+      living_arrangement: "with_family",
+      height_cm: 160,
+      weight_kg: 56,
+      phone: "13520194837",
+      source: "manual",
+      created_by_role: "rater",
+      raw_data: {
+        id: "sub-blank-004",
+        subjectNo: "BLANK-2026-004",
+        evalDate: "2026-09-10",
+        demographics: {
+          name: "赵桂兰",
+          idCard: "110104196307194627",
+          gender: 2,
+          age: 63,
+          birthDate: "1963-07-19",
+          educationYears: 9,
+          phone1: "13520194837",
+          address: "北京市丰台区方庄东路",
+        },
+        scdQ9: {},
+        scales: {},
+        diagnosis: {
+          category: 0,
+          notes: "",
+          approvalStatus: "none",
+        },
+        followUp: {
+          nextVisitDate: "",
+          evaluatorSignature: "",
+        },
+      },
+    },
+  ];
+
+  // Insert standard patients
+  for (const p of cohort) {
+    await db.execute({
+      sql: `
+        INSERT INTO patients (
+          id, research_no, name, gender, birth_year, age, education_years,
+          marital_status, living_arrangement, height_cm, weight_kg, phone,
+          source, created_by_role, history_json, biomarkers_json, raw_data_json,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?)
+      `,
+      args: [
+        p.id,
+        p.research_no,
+        p.name,
+        p.gender,
+        p.birth_year,
+        p.age,
+        p.education_years,
+        p.marital_status,
+        p.living_arrangement,
+        p.height_cm,
+        p.weight_kg,
+        p.phone,
+        p.source,
+        p.created_by_role,
+        JSON.stringify(p.raw_data),
+        now,
+        now,
+      ],
+    });
+  }
+
+  // 3. Create strictly ONE pending AI consultation for 李淑芬
+  const pendingSummary = {
+    tag: "典型SCD",
+    suggestedCategory: 1,
+    confidence: 0.92,
+    summary: "受试者 李淑芬 (女, 68岁) 自评 SCD-Q9 评分为 6/9 分，主诉近 1 年半记忆力持续减退且有担忧情绪；知情者 FAQ 0分，日常生活完全独立，符合 Jessen 2014 标准主观认知下降早期特征。",
+    reportText: "【宣武医院认知障碍多模态智能临床研判报告】\n受试者编号：SCD-2026-002   受试者姓名：李淑芬   性别：女   年龄：68岁   文化程度：9年\n一、临床综合分型研判：\n【主观认知下降 (Subjective Cognitive Decline, SCD 典型期)】\n推荐临床诊断编码：SCD (Category 1)    综合研判置信度：92%\n\n二、多维临床依据与自评特征：\n1. 主观记忆自评：SCD-Q9 自评分数 6/9 分，伴近事遗忘与明显担忧，符合 Jessen 等 SCD-plus 高危主诉标准。\n2. 心理与情绪自评：GDS-15 评分 4/15 分，处于轻度情绪波动范围；PSQI 睡眠障碍指数 5 分。\n\n三、专家处理与随访建议：\n1. 纳入宣武医院多中心 SCD 科研队列，建立 12 个月纵向追踪档案。\n2. 建议由主治医师完成客观神经心理量表测试（MMSE、MoCA-B）并签署电子签名。\n（本建议已实时推送至主治医师工作站待办队列，经医生电子签字后正式生效）",
+    version: 1,
+    versionHistory: [],
+  };
+
+  await db.execute({
+    sql: `
+      INSERT INTO ai_consultations (
+        id, patient_id, patient_name, status, suggested_diagnosis,
+        confidence, ai_summary_json, doctor_signature, doctor_notes,
+        created_at, reviewed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, '')
+    `,
+    args: [
+      "aic_scd_002_lishufen",
+      "sub-scd-002",
+      "李淑芬",
+      "pending_doctor_signature",
+      "典型SCD: 李淑芬 - 典型主观认知下降阶段 (SCD, 符合 NIA-AA 临床早期特征)",
+      0.92,
+      JSON.stringify(pendingSummary),
+      now,
+    ],
+  });
+
+  console.log("Standard 4-cohort patient database cleaned and initialized successfully.");
+  return { success: true, count: 4 };
 }

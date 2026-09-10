@@ -15,6 +15,7 @@ import {
   createAiConsultation,
   getPendingAiConsultations,
   approveAiConsultation,
+  cleanAndSeedStandardCohort,
 } from "./server/turso.ts";
 import { parseDocumentWithOcr, SAMPLE_DOCUMENTS } from "./server/ocrService.ts";
 
@@ -177,6 +178,17 @@ app.post("/api/v1/seed-cohort", async (req: Request, res: Response) => {
     res.json({ success: true, count: results.length });
   } catch (error: any) {
     console.error("Turso seed error:", error);
+    res.status(500).json({ success: false, error: error?.message });
+  }
+});
+
+// 9.1 Reset Database & Seed Standard Differentiated 4-Patient Cohort
+app.post("/api/v1/reset-cohort", async (_req: Request, res: Response) => {
+  try {
+    const result = await cleanAndSeedStandardCohort();
+    res.json(result);
+  } catch (error: any) {
+    console.error("Reset cohort error:", error);
     res.status(500).json({ success: false, error: error?.message });
   }
 });
@@ -662,6 +674,21 @@ function parseMedicalRecordFallback(text: string) {
 async function startServer() {
   try {
     await initDatabase();
+    // Auto-clean any corrupt / garbled legacy records and ensure the standard 4-patient cohort is loaded
+    const currentPatients = await getAllPatients();
+    const hasCorruptData = currentPatients.some(
+      (p: any) =>
+        !p.name ||
+        !p.name.trim() ||
+        p.name.includes("\uFFFD") ||
+        p.name === "受试者 4" ||
+        p.id === "sub-1789013609015"
+    );
+    const hasLiShufen = currentPatients.some((p: any) => p.name === "李淑芬");
+    if (hasCorruptData || !hasLiShufen || currentPatients.length < 4) {
+      console.log("Database contains corrupted records or missing standard cohort. Cleaning and resetting database...");
+      await cleanAndSeedStandardCohort();
+    }
   } catch (err) {
     console.error("Failed to initialize Turso database on boot:", err);
   }

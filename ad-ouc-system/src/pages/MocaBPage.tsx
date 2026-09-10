@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import { SubjectRecord } from "../types/assessment";
 import { calculateMoCAB } from "../utils/scoringCalculators";
-import { Brain, CheckCircle2, AlertTriangle, Eye, Clock, HelpCircle } from "lucide-react";
+import { Brain, CheckCircle2, AlertTriangle, Eye, Clock, HelpCircle, Save } from "lucide-react";
 import { InteractiveCanvas } from "../components/InteractiveCanvas";
 
 interface MocaBPageProps {
@@ -10,10 +10,36 @@ interface MocaBPageProps {
 }
 
 export const MocaBPage: React.FC<MocaBPageProps> = ({ record, onUpdateRecord }) => {
-  const eduYears = record.demographics.educationYears || 0;
-  const mocaResult = calculateMoCAB(record.scales.mocaB, eduYears);
+  const [saveToast, setSaveToast] = useState(false);
+  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
 
-  const updateMoCABField = (field: keyof SubjectRecord["scales"]["mocaB"], val: number) => {
+  const eduYears = record.demographics.educationYears || 0;
+  const mocaData = record.scales.mocaB || {};
+
+  const hasMocaStarted = Boolean(
+    record.scales.mocaB &&
+      (record.scales.mocaB.executiveTrail !== undefined ||
+        record.scales.mocaB.fluencyFruit !== undefined ||
+        record.scales.mocaB.orientation !== undefined ||
+        record.scales.mocaB.calculation13Yuan !== undefined ||
+        record.scales.mocaB.abstraction !== undefined ||
+        record.scales.mocaB.delayedRecall !== undefined ||
+        record.scales.mocaB.visualPerception10Obj !== undefined ||
+        record.scales.mocaB.naming4Animals !== undefined ||
+        record.scales.mocaB.attentionDigitsWhite !== undefined ||
+        record.scales.mocaB.attentionDigitsBlack !== undefined)
+  );
+
+  const mocaResult = calculateMoCAB(mocaData, eduYears);
+
+  const triggerSaveFeedback = () => {
+    const timeStr = new Date().toLocaleTimeString();
+    setLastSavedTime(timeStr);
+    setSaveToast(true);
+    setTimeout(() => setSaveToast(false), 2000);
+  };
+
+  const updateMoCABField = (field: keyof SubjectRecord["scales"]["mocaB"], val: number | undefined) => {
     onUpdateRecord({
       ...record,
       scales: {
@@ -21,6 +47,7 @@ export const MocaBPage: React.FC<MocaBPageProps> = ({ record, onUpdateRecord }) 
         mocaB: { ...record.scales.mocaB, [field]: val },
       },
     });
+    triggerSaveFeedback();
   };
 
   return (
@@ -29,9 +56,17 @@ export const MocaBPage: React.FC<MocaBPageProps> = ({ record, onUpdateRecord }) 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
-            <span className="text-xs font-bold uppercase tracking-wider text-indigo-700">
-              H15 · 适合中国低教育与老年人群
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-indigo-700">
+                H15 · 适合中国低教育与老年人群
+              </span>
+              {lastSavedTime && (
+                <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  已自动保存 ({lastSavedTime})
+                </span>
+              )}
+            </div>
             <h2 className="text-lg font-bold text-slate-900">
               H15. 蒙特利尔认知评估基础量表 (MoCA-B 华山版)
             </h2>
@@ -51,13 +86,19 @@ export const MocaBPage: React.FC<MocaBPageProps> = ({ record, onUpdateRecord }) 
               <span className="block text-[11px] text-indigo-800 font-medium">MoCA-B 得分</span>
               <span
                 className={`font-mono text-base font-bold ${
-                  mocaResult.isAbnormal ? "text-amber-700" : "text-emerald-700"
+                  !hasMocaStarted
+                    ? "text-slate-400"
+                    : mocaResult.isAbnormal
+                    ? "text-amber-700"
+                    : "text-emerald-700"
                 }`}
               >
-                {mocaResult.score} / 30 分
+                {hasMocaStarted ? `${mocaResult.score} / 30 分` : "-- / 30 分"}
               </span>
               <span className="block text-[10px] text-slate-500">
-                {mocaResult.isAbnormal
+                {!hasMocaStarted
+                  ? "(待录入 / 未评定)"
+                  : mocaResult.isAbnormal
                   ? `(异常 ≤${mocaResult.cutoff}分)`
                   : `(正常 >${mocaResult.cutoff}分)`}
               </span>
@@ -68,13 +109,20 @@ export const MocaBPage: React.FC<MocaBPageProps> = ({ record, onUpdateRecord }) 
 
       {/* 9 Cognitive Domains Interactive Cards */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-2xs space-y-6">
-        <div className="border-b border-slate-100 pb-3">
-          <h3 className="text-base font-bold text-slate-800">
-            MoCA-B 九大认知子域逐项评定 (共 30 分)
-          </h3>
-          <p className="text-xs text-slate-500">
-            逐项评定受试者在执行、言语、定向、计算、抽象、记忆、视知觉、命名和注意力的表现
-          </p>
+        <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-bold text-slate-800">
+              MoCA-B 九大认知子域逐项评定 (共 30 分)
+            </h3>
+            <p className="text-xs text-slate-500">
+              逐项评定受试者在执行、言语、定向、计算、抽象、记忆、视知觉、命名和注意力的表现
+            </p>
+          </div>
+          {saveToast && (
+            <span className="text-xs text-emerald-600 font-bold bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 animate-fade-in">
+              ✓ 评定表已自动保存
+            </span>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
@@ -88,10 +136,13 @@ export const MocaBPage: React.FC<MocaBPageProps> = ({ record, onUpdateRecord }) 
               要求受试者在数字与对应点数间交替连线 (如 1 → 1点 → 2 → 2点...)
             </p>
             <select
-              value={record.scales.mocaB.executiveTrail}
-              onChange={(e) => updateMoCABField("executiveTrail", Number(e.target.value))}
+              value={mocaData.executiveTrail !== undefined ? mocaData.executiveTrail : ""}
+              onChange={(e) =>
+                updateMoCABField("executiveTrail", e.target.value === "" ? undefined : Number(e.target.value))
+              }
               className="w-full p-2.5 border border-slate-300 rounded-xl bg-white text-xs font-semibold text-slate-800"
             >
+              <option value="">-- 请选择 --</option>
               <option value={1}>1 分 (完全按顺序无错误)</option>
               <option value={0}>0 分 (出现任何错误或无法完成)</option>
             </select>
@@ -107,10 +158,13 @@ export const MocaBPage: React.FC<MocaBPageProps> = ({ record, onUpdateRecord }) 
               请受试者在 1 分钟内尽可能多地说出水果名称
             </p>
             <select
-              value={record.scales.mocaB.fluencyFruit}
-              onChange={(e) => updateMoCABField("fluencyFruit", Number(e.target.value))}
+              value={mocaData.fluencyFruit !== undefined ? mocaData.fluencyFruit : ""}
+              onChange={(e) =>
+                updateMoCABField("fluencyFruit", e.target.value === "" ? undefined : Number(e.target.value))
+              }
               className="w-full p-2.5 border border-slate-300 rounded-xl bg-white text-xs font-semibold text-slate-800"
             >
+              <option value="">-- 请选择 --</option>
               <option value={2}>2 分 (≥ 13 个)</option>
               <option value={1}>1 分 (8 - 12 个)</option>
               <option value={0}>0 分 (≤ 7 个)</option>
@@ -131,8 +185,11 @@ export const MocaBPage: React.FC<MocaBPageProps> = ({ record, onUpdateRecord }) 
                 type="number"
                 min={0}
                 max={6}
-                value={record.scales.mocaB.orientation}
-                onChange={(e) => updateMoCABField("orientation", Number(e.target.value))}
+                placeholder="0 - 6"
+                value={mocaData.orientation !== undefined ? mocaData.orientation : ""}
+                onChange={(e) =>
+                  updateMoCABField("orientation", e.target.value === "" ? undefined : Number(e.target.value))
+                }
                 className="w-full p-2 border border-slate-300 rounded-xl bg-white text-xs font-bold font-mono text-center text-slate-800"
               />
               <span className="text-slate-500 shrink-0">/ 6 分</span>
@@ -149,10 +206,13 @@ export const MocaBPage: React.FC<MocaBPageProps> = ({ record, onUpdateRecord }) 
               用 1元/5元/10元 纸币组合支付 13 元，要求给出不同方案
             </p>
             <select
-              value={record.scales.mocaB.calculation13Yuan}
-              onChange={(e) => updateMoCABField("calculation13Yuan", Number(e.target.value))}
+              value={mocaData.calculation13Yuan !== undefined ? mocaData.calculation13Yuan : ""}
+              onChange={(e) =>
+                updateMoCABField("calculation13Yuan", e.target.value === "" ? undefined : Number(e.target.value))
+              }
               className="w-full p-2.5 border border-slate-300 rounded-xl bg-white text-xs font-semibold text-slate-800"
             >
+              <option value="">-- 请选择 --</option>
               <option value={3}>3 分 (给出 3 种正确付款方式)</option>
               <option value={2}>2 分 (给出 2 种正确付款方式)</option>
               <option value={1}>1 分 (给出 1 种正确付款方式)</option>
@@ -174,8 +234,11 @@ export const MocaBPage: React.FC<MocaBPageProps> = ({ record, onUpdateRecord }) 
                 type="number"
                 min={0}
                 max={3}
-                value={record.scales.mocaB.abstraction}
-                onChange={(e) => updateMoCABField("abstraction", Number(e.target.value))}
+                placeholder="0 - 3"
+                value={mocaData.abstraction !== undefined ? mocaData.abstraction : ""}
+                onChange={(e) =>
+                  updateMoCABField("abstraction", e.target.value === "" ? undefined : Number(e.target.value))
+                }
                 className="w-full p-2 border border-slate-300 rounded-xl bg-white text-xs font-bold font-mono text-center text-slate-800"
               />
               <span className="text-slate-500 shrink-0">/ 3 分</span>
@@ -196,8 +259,11 @@ export const MocaBPage: React.FC<MocaBPageProps> = ({ record, onUpdateRecord }) 
                 type="number"
                 min={0}
                 max={5}
-                value={record.scales.mocaB.delayedRecall}
-                onChange={(e) => updateMoCABField("delayedRecall", Number(e.target.value))}
+                placeholder="0 - 5"
+                value={mocaData.delayedRecall !== undefined ? mocaData.delayedRecall : ""}
+                onChange={(e) =>
+                  updateMoCABField("delayedRecall", e.target.value === "" ? undefined : Number(e.target.value))
+                }
                 className="w-full p-2 border border-slate-300 rounded-xl bg-white text-xs font-bold font-mono text-center text-slate-800"
               />
               <span className="text-slate-500 shrink-0">/ 5 分</span>
@@ -214,10 +280,13 @@ export const MocaBPage: React.FC<MocaBPageProps> = ({ record, onUpdateRecord }) 
               出示重叠图，让受试者找出剪刀、钥匙、梳子等 10 件物品
             </p>
             <select
-              value={record.scales.mocaB.visualPerception10Obj}
-              onChange={(e) => updateMoCABField("visualPerception10Obj", Number(e.target.value))}
+              value={mocaData.visualPerception10Obj !== undefined ? mocaData.visualPerception10Obj : ""}
+              onChange={(e) =>
+                updateMoCABField("visualPerception10Obj", e.target.value === "" ? undefined : Number(e.target.value))
+              }
               className="w-full p-2.5 border border-slate-300 rounded-xl bg-white text-xs font-semibold text-slate-800"
             >
+              <option value="">-- 请选择 --</option>
               <option value={3}>3 分 (正确找出 9 - 10 个)</option>
               <option value={2}>2 分 (正确找出 6 - 8 个)</option>
               <option value={1}>1 分 (正确找出 4 - 5 个)</option>
@@ -239,8 +308,11 @@ export const MocaBPage: React.FC<MocaBPageProps> = ({ record, onUpdateRecord }) 
                 type="number"
                 min={0}
                 max={4}
-                value={record.scales.mocaB.naming4Animals}
-                onChange={(e) => updateMoCABField("naming4Animals", Number(e.target.value))}
+                placeholder="0 - 4"
+                value={mocaData.naming4Animals !== undefined ? mocaData.naming4Animals : ""}
+                onChange={(e) =>
+                  updateMoCABField("naming4Animals", e.target.value === "" ? undefined : Number(e.target.value))
+                }
                 className="w-full p-2 border border-slate-300 rounded-xl bg-white text-xs font-bold font-mono text-center text-slate-800"
               />
               <span className="text-slate-500 shrink-0">/ 4 分</span>
@@ -258,18 +330,24 @@ export const MocaBPage: React.FC<MocaBPageProps> = ({ record, onUpdateRecord }) 
             </p>
             <div className="flex gap-2">
               <select
-                value={record.scales.mocaB.attentionDigitsWhite}
-                onChange={(e) => updateMoCABField("attentionDigitsWhite", Number(e.target.value))}
+                value={mocaData.attentionDigitsWhite !== undefined ? mocaData.attentionDigitsWhite : ""}
+                onChange={(e) =>
+                  updateMoCABField("attentionDigitsWhite", e.target.value === "" ? undefined : Number(e.target.value))
+                }
                 className="flex-1 p-2 border border-slate-300 rounded-xl bg-white text-xs"
               >
+                <option value="">-- 白底 --</option>
                 <option value={1}>白底: 1分 (≤1错)</option>
                 <option value={0}>白底: 0分 (≥2错)</option>
               </select>
               <select
-                value={record.scales.mocaB.attentionDigitsBlack}
-                onChange={(e) => updateMoCABField("attentionDigitsBlack", Number(e.target.value))}
+                value={mocaData.attentionDigitsBlack !== undefined ? mocaData.attentionDigitsBlack : ""}
+                onChange={(e) =>
+                  updateMoCABField("attentionDigitsBlack", e.target.value === "" ? undefined : Number(e.target.value))
+                }
                 className="flex-1 p-2 border border-slate-300 rounded-xl bg-white text-xs"
               >
+                <option value="">-- 黑底 --</option>
                 <option value={2}>黑底: 2分 (≤2错)</option>
                 <option value={1}>黑底: 1分 (3错)</option>
                 <option value={0}>黑底: 0分 (≥4错)</option>

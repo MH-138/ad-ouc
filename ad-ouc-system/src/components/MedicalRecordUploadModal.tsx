@@ -224,8 +224,8 @@ export const MedicalRecordUploadModal: React.FC<MedicalRecordUploadModalProps> =
     }
   };
 
-  // Dedicated button: 「模拟文档」
-  // Automatically loads a simulated medical record, sets it in state, and runs the extraction
+  // Dedicated standard loader: 「标准病历/检验单样例」
+  // Automatically loads a standard medical record/lab report, sets it in state, and runs the extraction
   const handleSimulateDocument = async () => {
     setIsLoading(true);
     setErrorMsg(null);
@@ -358,10 +358,10 @@ export const MedicalRecordUploadModal: React.FC<MedicalRecordUploadModalProps> =
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900 leading-tight">
-                病历文档识别
+                门诊病历与生化检验报告智能识别 (OCR)
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                上传文件或粘贴文本，核对后写入受试者档案
+                支持上传门诊病历、血生化化验单(Aβ/Tau/同型半胱氨酸)及影像报告，智能结构化提取
               </p>
             </div>
           </div>
@@ -492,17 +492,17 @@ export const MedicalRecordUploadModal: React.FC<MedicalRecordUploadModalProps> =
                     )}
                   </button>
 
-                  {/* Dedicated button in bottom right: 「模拟文档」 */}
+                  {/* Dedicated button in bottom right: 「载入示例报告」 */}
                   <button
                     type="button"
                     id="btn-simulate-document"
                     onClick={handleSimulateDocument}
                     disabled={isLoading}
                     className="flex items-center gap-1.5 rounded-xl bg-purple-600 px-4 py-2.5 text-xs font-bold text-white shadow-2xs hover:bg-purple-700 disabled:opacity-50 transition cursor-pointer"
-                    title="载入一份示例文档并完成解析"
+                    title="自动载入一份示例门诊病历或生化检验单并完成解析"
                   >
                     <FileSpreadsheet className="h-4 w-4" />
-                    <span>模拟文档</span>
+                    <span>载入示例检验单/病历</span>
                   </button>
                 </div>
               </div>

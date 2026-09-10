@@ -742,26 +742,27 @@ export function calculateSCDQ9(scd: SubjectRecord["scdQ9"]) {
 export function evaluateCompleteAssessment(record: SubjectRecord): AssessmentSummaryResults {
   const eduYears = record.demographics?.educationYears || 0;
   const age = record.demographics?.age || 65;
+  const scales = record.scales || ({} as any);
 
   return {
     scdQ9: calculateSCDQ9(record.scdQ9),
-    handedness: calculateHandedness(record.scales.handedness.tasks),
-    mmse: calculateMMSE(record.scales.mmse.items, eduYears),
-    mocaB: calculateMoCAB(record.scales.mocaB, eduYears),
-    avltH: calculateAVLTH(record.scales.avltH, age, eduYears),
-    logicalMemory: calculateLogicalMemory(record.scales.logicalMemory, eduYears),
-    vft: calculateVFT(record.scales.vft, eduYears, age),
-    bnt: calculateBNT(record.scales.bnt, eduYears, age),
-    stt: calculateSTT(record.scales.stt, eduYears, age),
-    mes: calculateMES(record.scales.mes, eduYears),
-    faq: calculateFAQ(record.scales.faq.items),
-    ecog: calculateEcog(record.scales.ecog.items),
-    gds15: calculateGDS15(record.scales.gds15.answers),
-    hamd17: calculateHAMD17(record.scales.hamd17.items),
-    hama: calculateHAMA(record.scales.hama.items),
-    psqi: calculatePSQI(record.scales.psqi),
-    rbdsq: calculateRBDSQ(record.scales.rbdsq.items),
-    ess: calculateESS(record.scales.ess.items),
-    npi: calculateNPI(record.scales.npi.items),
+    handedness: calculateHandedness(scales.handedness?.tasks || {}),
+    mmse: calculateMMSE(scales.mmse?.items || {}, eduYears),
+    mocaB: calculateMoCAB(scales.mocaB || {}, eduYears),
+    avltH: calculateAVLTH(scales.avltH || {}, age, eduYears),
+    logicalMemory: calculateLogicalMemory(scales.logicalMemory || {}, eduYears),
+    vft: calculateVFT(scales.vft || {}, eduYears, age),
+    bnt: calculateBNT(scales.bnt || {}, eduYears, age),
+    stt: calculateSTT(scales.stt || {}, eduYears, age),
+    mes: calculateMES(scales.mes || {}, eduYears),
+    faq: calculateFAQ(scales.faq?.items || {}),
+    ecog: calculateEcog(scales.ecog?.items || {}),
+    gds15: calculateGDS15(scales.gds15?.answers || {}),
+    hamd17: calculateHAMD17(scales.hamd17?.items || {}),
+    hama: calculateHAMA(scales.hama?.items || {}),
+    psqi: calculatePSQI(scales.psqi || {}),
+    rbdsq: calculateRBDSQ(scales.rbdsq?.items || {}),
+    ess: calculateESS(scales.ess?.items || {}),
+    npi: calculateNPI(scales.npi?.items || {}),
   };
 }

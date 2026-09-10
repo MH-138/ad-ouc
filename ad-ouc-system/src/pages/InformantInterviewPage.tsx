@@ -18,6 +18,7 @@ import {
   User,
   ListOrdered,
   LayoutList,
+  Stethoscope,
 } from "lucide-react";
 import { calculateFAQ } from "../utils/scoringCalculators";
 import { tursoApi } from "../services/tursoApi";
@@ -46,7 +47,7 @@ export const InformantInterviewPage: React.FC<InformantInterviewPageProps> = ({
   onUpdateRecord,
   onReturnToPortal,
 }) => {
-  const [activeTab, setActiveTab] = useState<"memory" | "faq" | "cdr_informant">("memory");
+  const [activeTab, setActiveTab] = useState<"memory" | "faq" | "cdr_informant" | "doctor_feedback">("memory");
   const [saveToast, setSaveToast] = useState(false);
 
   // FAQ step-by-step answering mode
@@ -269,6 +270,22 @@ export const InformantInterviewPage: React.FC<InformantInterviewPageProps> = ({
           >
             <HeartHandshake className="w-4 h-4" />
             <span>3. 临床痴呆分级 (CDR) 家属核实</span>
+          </button>
+          <button
+            onClick={() => setActiveTab("doctor_feedback")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+              activeTab === "doctor_feedback"
+                ? "bg-teal-700 text-white shadow-xs"
+                : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            <Stethoscope className="w-4 h-4" />
+            <span>4. 医生综合诊断与随访反馈</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+              record.diagnosis?.notes ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500"
+            }`}>
+              {record.diagnosis?.notes ? "已出具" : "待医生评定"}
+            </span>
           </button>
         </div>
       </div>
@@ -706,6 +723,110 @@ export const InformantInterviewPage: React.FC<InformantInterviewPageProps> = ({
                   );
                 })}
               </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "doctor_feedback" && (
+          <div className="space-y-6">
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center font-bold">
+                    <Stethoscope className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-slate-900">
+                      主治医师临床评估结论与家属随访指导
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      受试者完成自评与家属知情观察后，由主治医师综合出具的临床诊断分型与居家生活照护指南
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                      record.diagnosis?.notes
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                        : "bg-amber-50 text-amber-800 border-amber-200"
+                    }`}
+                  >
+                    {record.diagnosis?.notes ? "主治医师已出具随访指导" : "等待主治医生综合评估"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Status Flow Banner */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500 font-semibold">1. 受试者本人自评</div>
+                  <div className="text-sm font-bold text-slate-800 mt-1">
+                    {patientHasBegun ? "已提交 SCD-Q9 自评" : "待完成本人自评"}
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500 font-semibold">2. 家属知情观察</div>
+                  <div className="text-sm font-bold text-slate-800 mt-1">
+                    {faqAnsweredCount > 0 ? `FAQ 已答 ${faqAnsweredCount}/10 项` : "待开始测评"}
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-teal-50/70 border border-teal-200">
+                  <div className="text-teal-800 font-semibold">3. 医生审核与指导</div>
+                  <div className="text-sm font-bold text-teal-900 mt-1">
+                    {record.diagnosis?.notes ? "已签署出具随访医嘱" : "待主治医师评定"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Doctor Guidance Content */}
+              {record.diagnosis?.notes ? (
+                <div className="space-y-4 pt-2">
+                  <div className="p-4 rounded-xl bg-teal-50/50 border border-teal-200 space-y-2">
+                    <div className="font-bold text-teal-900 text-xs flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-teal-600" />
+                      <span>主治医师个性化诊断意见与随访医嘱：</span>
+                    </div>
+                    <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap font-sans">
+                      {record.diagnosis.notes}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-1">
+                      <div className="font-bold text-slate-800">照料者居家提醒</div>
+                      <p className="text-slate-500 leading-relaxed">
+                        鼓励受试者自主完成力所能及的家务与社区活动，勿过早包办代替；多以正面鼓励为主，避免因记忆遗忘产生责备情绪。
+                      </p>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-1">
+                      <div className="font-bold text-slate-800">定期神经心理随访复查</div>
+                      <p className="text-slate-500 leading-relaxed">
+                        建议遵医嘱在 {record.followUp?.nextVisitDate || "6至12个月"} 后前往宣武医院认知中心门诊复查量表及头颅影像。
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] text-slate-400 flex items-center justify-between pt-2 border-t border-slate-100">
+                    <span>评估签署医师：{record.followUp?.evaluatorSignature || record.evaluator || "主治医师"}</span>
+                    <span>档案编号：{record.subjectNo || record.id}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 space-y-2">
+                  <Stethoscope className="w-8 h-8 text-slate-400 mx-auto" />
+                  <div className="font-bold text-slate-700 text-xs">
+                    受试者自评或家属观察已暂存，等待主治医师进行专业神经心理学测试
+                  </div>
+                  <p className="text-slate-400 text-[11px] max-w-md mx-auto">
+                    主治医生在完成临床客观量表（MMSE/MoCA/AVLT/CDR）与生物标志物综合分析并签署后，针对家属的随访与照护指导将同步更新至此处。
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}

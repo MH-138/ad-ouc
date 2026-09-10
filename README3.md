@@ -1,22 +1,31 @@
 # 认知障碍早期诊断临床数据采集系统 · V3.0 交付说明
 
-> **版本标识**：V3.0（三端业务流程解耦、现代技术栈重构与全链路闭环交付）  
+> **版本标识**：V3.2（三端业务流程解耦、现代技术栈重构、身份证智能联动与全链路闭环交付）  
 > **前序版本**：接续根目录下 `README.md`（V1.0 原型框架）与 `README2.md`（V2.0 患者端填表说明）。  
-> **本次提交**：方智 / 22040031013  
+> **本次提交**：[提交人：_____方智______ / 学号：____22040031013______]  
 > **代码隔离准则**：本次交付的代码与文档统一独立存放于 `ad-ouc-system/` 目录，完全保留根目录下原 `ad-ouc-prototype/` 原型代码与原始历史文件，实现绝对隔离与工作留痕。
 
 ---
 
+## 4位演示用户：
+建立 4 位标准受试者队列供分层对照：
+张建华 (SCD-2026-001)：已完成全套测评，韩璎教授已出具随访医嘱并完成电子签名（已审核签署）；
+李淑芬 (SCD-2026-002)：已完成 SCD-Q9/GDS/PSQI 自评，待主治医师审核与电子签名（待审核队列唯一单条）；
+王卫国 (BLANK-2026-003)：纯空白男性受试者，量表与医嘱全空，供测评测试；
+赵桂兰 (BLANK-2026-004)：纯空白女性受试者，量表与医嘱全空，供测评测试。
+
+
+---
 ## 【本次主要完成工作摘要】
 
 | 评估考察维度 | 本次核心完成工作与技术实现 | 核心代码与测试路径 |
 |---|---|---|
 | **1. 三端业务彻底解耦与闭环** | 彻底拆分受试者端、家属端、医生工作台三大通道。受试者端自评（SCD-Q9跳过不记0分）；家属端绑定受试者并隔离填写FAQ/CDR；医生端初始患者为null，设置受试者工作区守卫，杜绝未选人乱填。彻底移除前端切换角色按钮。 | `src/App.tsx`<br>`src/components/AppLayout.tsx`<br>`src/pages/InformantInterviewPage.tsx`<br>`src/pages/PatientPortalPage.tsx` |
-| **2. 云端数据库设计与实现** | 接入 Turso LibSQL 云端关系型数据库，建立 4 张核心数据表（`patients` 主档案、`assessments` 测评明细、`drafts` 多流草稿、`ai_consultations` 研判审核）。草稿采用 `(patient_id, role, flow_id)` 联合主键，彻底解决同角色多流程覆盖。 | `server/turso.ts`<br>`server.ts`<br>`src/services/tursoApi.ts` |
-| **3. 全套神经心理量表与算法** | 严格按宣武医院及多中心认知障碍标准实现全套量表：MMSE（30分）、MoCA-B（30分）、AVLT-H、STT连线、CDR（华盛顿大学分级算法与总分计算）、FAQ、NPI、PSQI、HAMD-17、HAMA等。未作答状态显示为空，绝不记为0分。 | `src/pages/*`<br>`src/utils/scoringCalculators.ts`<br>`src/utils/prototypeScales.ts` |
-| **4. 医疗多模态与 AI 审核闭环** | ① **门诊病历 OCR 结构化提取**：支持病历图像/PDF/文本解析并一键回填档案。<br>② **神经心理绘图智能打分**：双五边形交叉、CDT 钟表描画、立方体仿画的形态分析与自动评分。<br>③ **AI 临床综合研判**：AI 生成三段式诊断意见 -> 待审核队列 -> 医生签字确认写入正式诊断。 | `src/components/MedicalRecordUploadModal.tsx`<br>`src/components/DoctorApprovalModal.tsx`<br>`src/components/AiAnalysisModal.tsx`<br>`server/ocrService.ts` |
-| **5. 完整技术文档与数据契约** | 撰写完备的文档体系：三端业务流程定稿、16个API接口与数据表定义文档、历史阶段日志与留痕记录、测试差距清单与代码保护红线。 | `ad-ouc-system/*.md` |
-| **6. 工程质量与环境规范** | TypeScript 严格类型检查 **0 错误**（`npm run lint` 通过）；Vite 生产打包构建成功（`npm run build`）；配置完整 `.gitignore`，零污染保护历史原型。 | `package.json`<br>`tsconfig.json`<br>`vite.config.ts` |
+| **2. 身份证号智能联动与真实模拟** | 新建档案支持18位身份证格式校验，自动截取反算出生年、实足周岁年龄与判定男女；提供【⚡ 随机一键生成受试者】快速生成真实合规测试档案；OCR识别区支持二代身份证、就诊卡与门诊病历一键识别；新建档案全指标严格为空。 | `src/components/NewPatientModal.tsx`<br>`src/utils/initialPatient.ts` |
+| **3. 队列数据分层与随访状态交互** | 清理历史乱码与旧受试者，建立分层清晰的标准队列（张建华-已签署随访医嘱、李淑芬-已自评待医生审核、王卫国与赵桂兰-纯空白对照）；档案卡片随访状态可交互点击查看完整医嘱或未出具提示。 | `src/pages/PatientCenterPage.tsx`<br>`server/turso.ts`<br>`server.ts` |
+| **4. 云端数据库设计与去重实现** | 接入 Turso LibSQL 云端关系型数据库，建立 4 张核心数据表（`patients`、`assessments`、`drafts`、`ai_consultations`）。待办审核队列严格按单患者唯一去重，医生签署后自动同步至受试者与家属端。 | `server/turso.ts`<br>`server.ts`<br>`src/services/tursoApi.ts` |
+| **5. 全套神经心理量表与空白保护** | 严格按宣武医院及多中心标准实现全套量表（MMSE、MoCA-B、AVLT-H、STT连线、CDR、FAQ、PSQI等）。空白受试者各题项显示为 `--`（待测），MoCA-B 提供空选项防误选，红黄绿灯矩阵不误报异常，全流程自动保存留痕。 | `src/pages/MmsePage.tsx`<br>`src/pages/MocaBPage.tsx`<br>`src/components/sections/SectionComprehensiveReport.tsx` |
+| **6. AI 临床智能推理平滑动态闭环** | 每次推理必播放 0%->32%->68%->92%->100% 平滑阶段动画，研判意见根据实际数据动态生成并附加唯一流水号与时间戳；推理完成后打上“待审核”标签并自动推至医生待办工作台。 | `src/components/AiAnalysisModal.tsx`<br>`src/components/DoctorApprovalModal.tsx` |
 
 ---
 

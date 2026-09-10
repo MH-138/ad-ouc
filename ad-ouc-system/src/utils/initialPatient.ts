@@ -396,141 +396,6 @@ export function createDefaultSubjectRecord(name = "新受试者"): SubjectRecord
 
 export const createDefaultPatient = createDefaultSubjectRecord;
 
-export const TYPICAL_SCD_PRESET: SubjectRecord = {
-  ...createDefaultSubjectRecord("张建华 (典型SCD)"),
-  id: "sub-scd-001",
-  subjectNo: "SCD-2026-001",
-  demographics: {
-    ...createDefaultSubjectRecord().demographics,
-    name: "张建华",
-    gender: 1,
-    age: 71,
-    educationYears: 12,
-  },
-};
-
-export const EARLY_MCI_PRESET: SubjectRecord = {
-  ...createDefaultSubjectRecord("李富民 (早期aMCI)"),
-  id: "sub-mci-002",
-  subjectNo: "MCI-2026-002",
-  demographics: {
-    ...createDefaultSubjectRecord().demographics,
-    name: "李富民",
-    gender: 1,
-    age: 73,
-    educationYears: 9,
-  },
-  scdQ9: {
-    ...createDefaultSubjectRecord().scdQ9,
-    q1: 1,
-    q2: 1,
-    q3: 1,
-    q4: 1,
-    q5: 1,
-    q6: 1,
-    q7: 1,
-    q8: 1,
-    q9: 0,
-  },
-  scales: {
-    ...createDefaultSubjectRecord().scales,
-    mmse: {
-      items: {
-        "2.1": 1, "2.2": 1, "2.3": 1, "2.4": 1, "2.5": 1,
-        "2.6": 1, "2.7": 1, "2.8": 1, "2.9": 1, "2.10": 1,
-        "2.11": 1, "2.12": 1, "2.13": 1,
-        "2.14": 1, "2.15": 1, "2.16": 1, "2.17": 0, "2.18": 0,
-        "2.19": 0, "2.20": 0, "2.21": 0,
-        "2.22": 1, "2.23": 1, "2.24": 1, "2.25": 1, "2.26": 1, "2.27": 1, "2.28": 1, "2.29": 1, "2.30": 1,
-      },
-    },
-    mocaB: {
-      ...createDefaultSubjectRecord().scales.mocaB,
-      delayedRecall: 1,
-      calculation13Yuan: 2,
-      abstraction: 1,
-    },
-    avltH: {
-      ...createDefaultSubjectRecord().scales.avltH,
-      n1Words: ["大衣", "海棠"],
-      n2Words: ["大衣", "海棠", "长裤"],
-      n3Words: ["大衣", "海棠", "长裤", "司机"],
-      n4Delayed5MinWords: ["大衣", "海棠"],
-      n5Delayed20MinWords: ["海棠", "大衣"],
-      n7RecognitionErrors: 6,
-    },
-    cdr: {
-      memory: 0.5,
-      orientation: 0.5,
-      judgment: 0,
-      community: 0,
-      homeHobbies: 0,
-      personalCare: 0,
-    },
-    faq: {
-      ...createDefaultSubjectRecord().scales.faq,
-      items: {
-        1: 0, 2: 1, 3: 0, 4: 1, 5: 0, 6: 1, 7: 0, 8: 1, 9: 0, 10: 0,
-      },
-    },
-  },
-  biomarkers: {
-    ...createDefaultSubjectRecord().biomarkers,
-    hippocampalAtrophy: true,
-    hippocampalSeverity: 2,
-    abetaPet: 1,
-    apoe4Genotype: {
-      tested: true,
-      value: "ε3/ε4",
-    },
-  },
-  diagnosis: {
-    category: 2, // aMCI
-    notes: "主诉近1年记忆力明显衰退，客观听觉词表延迟回忆(2个)与MoCA认知测试均落后于同龄常模(-1.5SD)，CDR=0.5分，日常生活能力基本保持独立(FAQ 4分)，伴海马萎缩及Aβ-PET阳性，符合遗忘型轻度认知障碍(aMCI)。",
-  },
-};
-
-export const HEALTHY_CONTROL_PRESET: SubjectRecord = {
-  ...createDefaultSubjectRecord("陈素芳 (健康对照 NC)"),
-  id: "sub-nc-003",
-  subjectNo: "NC-2026-003",
-  demographics: {
-    ...createDefaultSubjectRecord().demographics,
-    name: "陈素芳",
-    gender: 2,
-    age: 68,
-    educationYears: 15,
-  },
-  scdQ9: {
-    q1: 0, q2: 0, q3: 0, q4: 0, q5: 0, q6: 0, q7: 1, q8: 0, q9: 0,
-  },
-  scales: {
-    ...createDefaultSubjectRecord().scales,
-    avltH: {
-      ...createDefaultSubjectRecord().scales.avltH,
-      n1Words: ["大衣", "司机", "海棠", "木工", "长裤"],
-      n2Words: ["大衣", "司机", "海棠", "木工", "长裤", "百合", "头巾", "腊梅"],
-      n3Words: ["大衣", "司机", "海棠", "木工", "长裤", "百合", "头巾", "腊梅", "士兵", "玉兰"],
-      n4Delayed5MinWords: ["大衣", "司机", "海棠", "木工", "长裤", "百合", "头巾", "腊梅"],
-      n5Delayed20MinWords: ["大衣", "司机", "海棠", "木工", "长裤", "百合", "头巾", "腊梅"],
-      n7RecognitionErrors: 0,
-    },
-    cdr: {
-      memory: 0, orientation: 0, judgment: 0, community: 0, homeHobbies: 0, personalCare: 0,
-    },
-  },
-  diagnosis: {
-    category: 4, // NC
-    notes: "神经心理量表测试与日常功能均在正常高限，无主观认知下降及情绪睡眠障碍，为健康正常老年对照。",
-  },
-};
-
-export const DEFAULT_COHORT: SubjectRecord[] = [
-  TYPICAL_SCD_PRESET,
-  EARLY_MCI_PRESET,
-  HEALTHY_CONTROL_PRESET,
-];
-
 export function createEmptySubjectRecord(name = "", subjectNo = ""): SubjectRecord {
   const today = new Date().toISOString().split("T")[0];
   const nextYear = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().split("T")[0];
@@ -674,8 +539,10 @@ export function createEmptySubjectRecord(name = "", subjectNo = ""): SubjectReco
       },
     },
     diagnosis: {
-      category: 1,
+      category: 0,
       notes: "",
+      approvalStatus: "none",
+      versionHistory: [],
     },
     followUp: {
       nextVisitDate: nextYear,
@@ -683,5 +550,146 @@ export function createEmptySubjectRecord(name = "", subjectNo = ""): SubjectReco
     },
   };
 }
+
+export const TYPICAL_SCD_PRESET: SubjectRecord = {
+  ...createDefaultSubjectRecord("张建华"),
+  id: "sub-scd-001",
+  subjectNo: "SCD-2026-001",
+  demographics: {
+    ...createDefaultSubjectRecord().demographics,
+    name: "张建华",
+    idCard: "110102195508123218",
+    gender: 1,
+    age: 71,
+    birthDate: "1955-08-12",
+    educationYears: 12,
+    phone1: "13801015678",
+  },
+  diagnosis: {
+    category: 1,
+    notes: "【宣武医院神经内科临床诊断与随访医嘱】\n临床诊断：主观认知下降 (Subjective Cognitive Decline, SCD)\n评定依据：受试者存在主观记忆减退主诉且自感担忧（SCD-Q9评分为7分），客观认知量表测试 MMSE 28分、MoCA-B 26分，全球 CDR=0分，知情者 FAQ 0分，日常生活自理能力完整。\n随访医嘱：\n1. 纳入宣武医院多中心 SCD 早期干预随访队列，预约 12 个月后复查。\n2. 执行地中海膳食与有氧步行锻炼处方。\n3. 控制血压与代谢危险因素，定期检测血浆 p-tau217 与睡眠质量。",
+    evaluatorSignature: "韩璎 教授 / 主任医师",
+    approvedAt: "2026-09-08T09:30:00.000Z",
+    approvalStatus: "approved",
+  },
+  followUp: {
+    nextVisitDate: "2027-09-08",
+    evaluatorSignature: "韩璎 教授 / 主任医师",
+    signDate: "2026-09-08",
+  },
+};
+
+export const PENDING_REVIEW_PRESET: SubjectRecord = {
+  ...createEmptySubjectRecord("李淑芬", "SCD-2026-002"),
+  id: "sub-scd-002",
+  subjectNo: "SCD-2026-002",
+  demographics: {
+    ...createEmptySubjectRecord().demographics,
+    name: "李淑芬",
+    idCard: "110108195804251429",
+    gender: 2,
+    age: 68,
+    birthDate: "1958-04-25",
+    educationYears: 9,
+    phone1: "13910884562",
+  },
+  scdQ9: {
+    q1: 1,
+    q2: 1,
+    q3: 1,
+    q4: 0.5,
+    q5: 0.5,
+    q6: 1,
+    q7: 0.5,
+    q8: 0.5,
+    q9: 0,
+  },
+  scales: {
+    ...createEmptySubjectRecord().scales,
+    gds15: {
+      answers: {
+        1: false, 2: false, 3: false, 4: false, 5: true,
+        6: false, 7: true, 8: false, 9: false, 10: true,
+        11: false, 12: false, 13: true, 14: false, 15: false,
+      },
+    },
+    psqi: {
+      bedTime: "22:30",
+      sleepLatencyMinutes: 30,
+      wakeTime: "06:00",
+      actualSleepHours: 6,
+      troubles: { a: 1, b: 2, c: 1, d: 0, e: 0, f: 0, g: 0, h: 0, i: 0, j: 0 },
+      selfQuality: 2,
+      medication: 0,
+      daytimeDysfunction: 1,
+    },
+  },
+  diagnosis: {
+    category: 1,
+    notes: "",
+    approvalStatus: "pending",
+  },
+  followUp: {
+    nextVisitDate: "",
+    evaluatorSignature: "",
+  },
+};
+
+export const BLANK_PATIENT_1_PRESET: SubjectRecord = {
+  ...createEmptySubjectRecord("王卫国", "BLANK-2026-003"),
+  id: "sub-blank-003",
+  subjectNo: "BLANK-2026-003",
+  demographics: {
+    ...createEmptySubjectRecord().demographics,
+    name: "王卫国",
+    idCard: "110105196111082513",
+    gender: 1,
+    age: 65,
+    birthDate: "1961-11-08",
+    educationYears: 12,
+    phone1: "13601237890",
+  },
+  diagnosis: {
+    category: 0,
+    notes: "",
+    approvalStatus: "none",
+  },
+  followUp: {
+    nextVisitDate: "",
+    evaluatorSignature: "",
+  },
+};
+
+export const BLANK_PATIENT_2_PRESET: SubjectRecord = {
+  ...createEmptySubjectRecord("赵桂兰", "BLANK-2026-004"),
+  id: "sub-blank-004",
+  subjectNo: "BLANK-2026-004",
+  demographics: {
+    ...createEmptySubjectRecord().demographics,
+    name: "赵桂兰",
+    idCard: "110104196307194627",
+    gender: 2,
+    age: 63,
+    birthDate: "1963-07-19",
+    educationYears: 9,
+    phone1: "13520194837",
+  },
+  diagnosis: {
+    category: 0,
+    notes: "",
+    approvalStatus: "none",
+  },
+  followUp: {
+    nextVisitDate: "",
+    evaluatorSignature: "",
+  },
+};
+
+export const DEFAULT_COHORT: SubjectRecord[] = [
+  TYPICAL_SCD_PRESET,
+  PENDING_REVIEW_PRESET,
+  BLANK_PATIENT_1_PRESET,
+  BLANK_PATIENT_2_PRESET,
+];
 
 

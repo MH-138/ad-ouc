@@ -3,8 +3,9 @@ import { SubjectRecord } from "./types/assessment";
 import {
   DEFAULT_COHORT,
   TYPICAL_SCD_PRESET,
-  EARLY_MCI_PRESET,
-  HEALTHY_CONTROL_PRESET,
+  PENDING_REVIEW_PRESET,
+  BLANK_PATIENT_1_PRESET,
+  BLANK_PATIENT_2_PRESET,
   createDefaultPatient,
 } from "./utils/initialPatient";
 import { AppPageId } from "./types/navigation";
@@ -253,10 +254,12 @@ export default function App() {
     let newRec: SubjectRecord;
     if (presetName === "typical_scd") {
       newRec = { ...TYPICAL_SCD_PRESET, id: "sub-" + Date.now() };
-    } else if (presetName === "early_mci") {
-      newRec = { ...EARLY_MCI_PRESET, id: "sub-" + Date.now() };
+    } else if (presetName === "pending_review" || presetName === "early_mci") {
+      newRec = { ...PENDING_REVIEW_PRESET, id: "sub-" + Date.now() };
+    } else if (presetName === "blank_patient_1") {
+      newRec = { ...BLANK_PATIENT_1_PRESET, id: "sub-" + Date.now() };
     } else {
-      newRec = { ...HEALTHY_CONTROL_PRESET, id: "sub-" + Date.now() };
+      newRec = { ...BLANK_PATIENT_2_PRESET, id: "sub-" + Date.now() };
     }
     setCohort((prev) => [newRec, ...prev]);
     setActivePatientId(newRec.id);
@@ -657,6 +660,7 @@ export default function App() {
                   ...activeRecord.diagnosis,
                   category: category !== undefined ? category : (activeRecord.diagnosis?.category ?? 1),
                   notes,
+                  approvalStatus: "pending",
                 },
               });
               refreshPendingAi();

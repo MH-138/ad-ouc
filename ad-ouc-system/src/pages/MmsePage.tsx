@@ -1,9 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
 import { SubjectRecord } from "../types/assessment";
 import { calculateMMSE, calculateHandedness } from "../utils/scoringCalculators";
 import { InteractiveCanvas } from "../components/InteractiveCanvas";
 import { EDINBURGH_HANDEDNESS_ITEMS } from "../data/assessmentStimuli";
-import { Activity, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Activity, CheckCircle2, AlertTriangle, Save, Sparkles, Check } from "lucide-react";
 
 interface MmsePageProps {
   record: SubjectRecord;
@@ -11,9 +11,25 @@ interface MmsePageProps {
 }
 
 export const MmsePage: React.FC<MmsePageProps> = ({ record, onUpdateRecord }) => {
+  const [saveToast, setSaveToast] = useState(false);
+  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+
   const eduYears = record.demographics.educationYears || 0;
-  const mmseResult = calculateMMSE(record.scales.mmse.items, eduYears);
-  const handednessResult = calculateHandedness(record.scales.handedness.tasks);
+  const mmseItems = record.scales.mmse?.items || {};
+  const mmseAnsweredCount = Object.keys(mmseItems).length;
+  const isMmseStarted = mmseAnsweredCount > 0;
+
+  const mmseResult = calculateMMSE(mmseItems, eduYears);
+  const handednessTasks = record.scales.handedness?.tasks || {};
+  const hasHandednessStarted = Object.keys(handednessTasks).length > 0;
+  const handednessResult = calculateHandedness(handednessTasks);
+
+  const triggerSaveFeedback = () => {
+    const timeStr = new Date().toLocaleTimeString();
+    setLastSavedTime(timeStr);
+    setSaveToast(true);
+    setTimeout(() => setSaveToast(false), 2000);
+  };
 
   const updateMMSEItem = (key: string, val: number) => {
     onUpdateRecord({
@@ -26,10 +42,11 @@ export const MmsePage: React.FC<MmsePageProps> = ({ record, onUpdateRecord }) =>
         },
       },
     });
+    triggerSaveFeedback();
   };
 
   const updateHandednessItem = (taskKey: string, side: "left" | "right", val: 0 | 1 | 2) => {
-    const current = record.scales.handedness.tasks?.[taskKey] || { left: 0, right: 2 };
+    const current = record.scales.handedness.tasks?.[taskKey] || { left: 0, right: 0 };
     onUpdateRecord({
       ...record,
       scales: {
@@ -43,6 +60,7 @@ export const MmsePage: React.FC<MmsePageProps> = ({ record, onUpdateRecord }) =>
         },
       },
     });
+    triggerSaveFeedback();
   };
 
   return (
@@ -51,9 +69,17 @@ export const MmsePage: React.FC<MmsePageProps> = ({ record, onUpdateRecord }) =>
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
-            <span className="text-xs font-bold uppercase tracking-wider text-teal-700">
-              H1 & H2 · 神经心理初筛与大脑偏侧化
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-teal-700">
+                H1 & H2 · 神经心理初筛与大脑偏侧化
+              </span>
+              {lastSavedTime && (
+                <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  已自动保存 ({lastSavedTime})
+                </span>
+              )}
+            </div>
             <h2 className="text-lg font-bold text-slate-900">
               爱丁堡利手量表 与 MMSE 简易精神状态检查
             </h2>
@@ -66,7 +92,7 @@ export const MmsePage: React.FC<MmsePageProps> = ({ record, onUpdateRecord }) =>
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-center">
               <span className="block text-[11px] text-slate-500">利手判定</span>
               <span className="font-mono text-sm font-bold text-slate-800">
-                {handednessResult.result} ({handednessResult.score}分)
+                {hasHandednessStarted ? `${handednessResult.result} (${handednessResult.score}分)` : "未评定 / 待测"}
               </span>
             </div>
             <div className="rounded-xl border border-teal-200 bg-teal-50/50 px-4 py-2 text-center">
@@ -75,15 +101,21 @@ export const MmsePage: React.FC<MmsePageProps> = ({ record, onUpdateRecord }) =>
               </span>
               <span
                 className={`font-mono text-base font-bold ${
-                  mmseResult.isAbnormal ? "text-amber-700" : "text-emerald-700"
+                  !isMmseStarted
+                    ? "text-slate-400"
+                    : mmseResult.isAbnormal
+                    ? "text-amber-700"
+                    : "text-emerald-700"
                 }`}
               >
-                {mmseResult.score} / 30 分
+                {isMmseStarted ? `${mmseResult.score} / 30 分` : "-- / 30 分"}
               </span>
               <span className="block text-[10px] text-slate-500">
-                {mmseResult.isAbnormal
-                  ? `(异常 ≤${mmseResult.cutoff}分)`
-                  : `(正常 >${mmseResult.cutoff}分)`}
+                {!isMmseStarted
+                  ? "(待录入 0/30 项)"
+                  : mmseResult.isAbnormal
+                  ? `(异常 ≤${mmseResult.cutoff}分 · 已答${mmseAnsweredCount}项)`
+                  : `(正常 >${mmseResult.cutoff}分 · 已答${mmseAnsweredCount}项)`}
               </span>
             </div>
           </div>
@@ -111,13 +143,69 @@ export const MmsePage: React.FC<MmsePageProps> = ({ record, onUpdateRecord }) =>
           </div>
         </div>
 
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-slate-500">
+            {hasHandednessStarted
+              ? `已录入偏侧化评定 (${Object.keys(handednessTasks).length} / ${EDINBURGH_HANDEDNESS_ITEMS.length} 项)`
+              : "尚未录入利手评定（请主试按实际表现点击对应侧肢体）"}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                const allRight: Record<string, { left: 0; right: 2 }> = {};
+                EDINBURGH_HANDEDNESS_ITEMS.forEach((item) => {
+                  allRight[item.key] = { left: 0, right: 2 };
+                });
+                onUpdateRecord({
+                  ...record,
+                  scales: {
+                    ...record.scales,
+                    handedness: { ...record.scales.handedness, tasks: allRight },
+                  },
+                });
+                triggerSaveFeedback();
+              }}
+              className="text-[11px] px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 font-semibold border border-teal-200 transition"
+            >
+              一键全设右利手(常用)
+            </button>
+            {hasHandednessStarted && (
+              <button
+                type="button"
+                onClick={() => {
+                  onUpdateRecord({
+                    ...record,
+                    scales: {
+                      ...record.scales,
+                      handedness: { ...record.scales.handedness, tasks: {} },
+                    },
+                  });
+                  triggerSaveFeedback();
+                }}
+                className="text-[11px] px-2 py-1 rounded-lg hover:bg-slate-100 text-slate-500 transition"
+              >
+                重置清空
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-5 text-xs">
           {EDINBURGH_HANDEDNESS_ITEMS.map((item) => {
-            const task = record.scales.handedness.tasks?.[item.key] || { left: 0, right: 2 };
+            const task = record.scales.handedness?.tasks?.[item.key];
+            const isLeftSelected = task?.left === 2 && task?.right === 0;
+            const isBothSelected = task?.left === 1 && task?.right === 1;
+            const isRightSelected = task?.right === 2 && task?.left === 0;
+
             return (
               <div
                 key={item.key}
-                className="space-y-1.5 rounded-xl border border-slate-200 bg-slate-50 p-3"
+                className={`space-y-1.5 rounded-xl border p-3 transition ${
+                  task
+                    ? "border-slate-200 bg-slate-50"
+                    : "border-dashed border-slate-200 bg-white"
+                }`}
               >
                 <span className="block font-semibold text-slate-800">{item.name}</span>
                 <div className="flex items-center gap-1">
@@ -127,10 +215,10 @@ export const MmsePage: React.FC<MmsePageProps> = ({ record, onUpdateRecord }) =>
                       updateHandednessItem(item.key, "left", 2);
                       updateHandednessItem(item.key, "right", 0);
                     }}
-                    className={`flex-1 rounded py-1 text-[11px] font-medium transition ${
-                      task.left === 2
-                        ? "bg-indigo-600 text-white"
-                        : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                    className={`flex-1 rounded py-1 text-[11px] font-medium transition cursor-pointer ${
+                      isLeftSelected
+                        ? "bg-indigo-600 text-white font-bold"
+                        : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
                     }`}
                   >
                     左手 (2)
@@ -141,10 +229,10 @@ export const MmsePage: React.FC<MmsePageProps> = ({ record, onUpdateRecord }) =>
                       updateHandednessItem(item.key, "left", 1);
                       updateHandednessItem(item.key, "right", 1);
                     }}
-                    className={`flex-1 rounded py-1 text-[11px] font-medium transition ${
-                      task.left === 1 && task.right === 1
-                        ? "bg-indigo-600 text-white"
-                        : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                    className={`flex-1 rounded py-1 text-[11px] font-medium transition cursor-pointer ${
+                      isBothSelected
+                        ? "bg-indigo-600 text-white font-bold"
+                        : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
                     }`}
                   >
                     双手 (1)
@@ -155,10 +243,10 @@ export const MmsePage: React.FC<MmsePageProps> = ({ record, onUpdateRecord }) =>
                       updateHandednessItem(item.key, "left", 0);
                       updateHandednessItem(item.key, "right", 2);
                     }}
-                    className={`flex-1 rounded py-1 text-[11px] font-medium transition ${
-                      task.right === 2 && task.left === 0
-                        ? "bg-teal-600 text-white"
-                        : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                    className={`flex-1 rounded py-1 text-[11px] font-medium transition cursor-pointer ${
+                      isRightSelected
+                        ? "bg-teal-600 text-white font-bold"
+                        : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
                     }`}
                   >
                     右手 (2)
@@ -188,8 +276,11 @@ export const MmsePage: React.FC<MmsePageProps> = ({ record, onUpdateRecord }) =>
           </div>
           <div className="text-right">
             <span className="block text-xs text-slate-400">MMSE 得分</span>
-            <span className="font-mono text-lg font-bold text-blue-600">
-              {mmseResult.score} / 30 分
+            <span className={`font-mono text-lg font-bold ${isMmseStarted ? "text-blue-600" : "text-slate-400"}`}>
+              {isMmseStarted ? `${mmseResult.score} / 30 分` : "-- / 30 分"}
+            </span>
+            <span className="block text-[10px] text-slate-400">
+              {isMmseStarted ? `已录入 ${mmseAnsweredCount}/30 项` : "(未录入 / 待测评)"}
             </span>
           </div>
         </div>
@@ -205,10 +296,10 @@ export const MmsePage: React.FC<MmsePageProps> = ({ record, onUpdateRecord }) =>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
               {[
-                { key: "2.1", label: "2.1 哪一年？" },
-                { key: "2.2", label: "2.2 什么季节？" },
-                { key: "2.3", label: "2.3 几月份？" },
-                { key: "2.4", label: "2.4 几号？" },
+                { key: "2.1", label: "2.1 今年是哪一年？" },
+                { key: "2.2", label: "2.2 现在是什么季节？" },
+                { key: "2.3", label: "2.3 现在是几月？" },
+                { key: "2.4", label: "2.4 今天是几号？" },
                 { key: "2.5", label: "2.5 星期几？" },
                 { key: "2.6", label: "2.6 什么城市？" },
                 { key: "2.7", label: "2.7 城区/区县？" },
@@ -216,25 +307,37 @@ export const MmsePage: React.FC<MmsePageProps> = ({ record, onUpdateRecord }) =>
                 { key: "2.9", label: "2.9 第几层楼？" },
                 { key: "2.10", label: "2.10 什么地方/医院？" },
               ].map((item) => {
-                const isCorrect = record.scales.mmse.items?.[item.key] === 1;
+                const rawVal = record.scales.mmse.items?.[item.key];
+                const isAnswered = rawVal !== undefined;
+                const isCorrect = rawVal === 1;
                 return (
                   <button
                     key={item.key}
                     type="button"
-                    onClick={() => updateMMSEItem(item.key, isCorrect ? 0 : 1)}
-                    className={`flex items-center justify-between rounded-xl border p-2.5 text-left transition ${
-                      isCorrect
+                    onClick={() => {
+                      if (!isAnswered) updateMMSEItem(item.key, 1);
+                      else if (isCorrect) updateMMSEItem(item.key, 0);
+                      else updateMMSEItem(item.key, 1);
+                    }}
+                    className={`flex items-center justify-between rounded-xl border p-2.5 text-left transition cursor-pointer ${
+                      !isAnswered
+                        ? "border-dashed border-slate-200 bg-white text-slate-500 hover:border-teal-300"
+                        : isCorrect
                         ? "border-teal-500 bg-teal-50 font-semibold text-teal-900"
-                        : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                        : "border-slate-300 bg-slate-100 text-slate-700"
                     }`}
                   >
                     <span>{item.label}</span>
                     <span
                       className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${
-                        isCorrect ? "bg-teal-600 text-white" : "bg-white text-slate-500 border border-slate-200"
+                        !isAnswered
+                          ? "bg-slate-100 text-slate-400 border border-slate-200"
+                          : isCorrect
+                          ? "bg-teal-600 text-white"
+                          : "bg-rose-500 text-white"
                       }`}
                     >
-                      {isCorrect ? "1分" : "0分"}
+                      {!isAnswered ? "--" : isCorrect ? "1分" : "0分"}
                     </span>
                   </button>
                 );
@@ -253,25 +356,37 @@ export const MmsePage: React.FC<MmsePageProps> = ({ record, onUpdateRecord }) =>
                 { key: "2.12", label: "2.12 国旗" },
                 { key: "2.13", label: "2.13 树木" },
               ].map((item) => {
-                const isCorrect = record.scales.mmse.items?.[item.key] === 1;
+                const rawVal = record.scales.mmse.items?.[item.key];
+                const isAnswered = rawVal !== undefined;
+                const isCorrect = rawVal === 1;
                 return (
                   <button
                     key={item.key}
                     type="button"
-                    onClick={() => updateMMSEItem(item.key, isCorrect ? 0 : 1)}
-                    className={`flex items-center justify-between rounded-xl border p-2.5 text-left transition ${
-                      isCorrect
+                    onClick={() => {
+                      if (!isAnswered) updateMMSEItem(item.key, 1);
+                      else if (isCorrect) updateMMSEItem(item.key, 0);
+                      else updateMMSEItem(item.key, 1);
+                    }}
+                    className={`flex items-center justify-between rounded-xl border p-2.5 text-left transition cursor-pointer ${
+                      !isAnswered
+                        ? "border-dashed border-slate-200 bg-white text-slate-500 hover:border-teal-300"
+                        : isCorrect
                         ? "border-teal-500 bg-teal-50 font-semibold text-teal-900"
-                        : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                        : "border-slate-300 bg-slate-100 text-slate-700"
                     }`}
                   >
                     <span>{item.label}</span>
                     <span
                       className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${
-                        isCorrect ? "bg-teal-600 text-white" : "bg-white text-slate-500 border border-slate-200"
+                        !isAnswered
+                          ? "bg-slate-100 text-slate-400 border border-slate-200"
+                          : isCorrect
+                          ? "bg-teal-600 text-white"
+                          : "bg-rose-500 text-white"
                       }`}
                     >
-                      {isCorrect ? "1分" : "0分"}
+                      {!isAnswered ? "--" : isCorrect ? "1分" : "0分"}
                     </span>
                   </button>
                 );
@@ -292,25 +407,37 @@ export const MmsePage: React.FC<MmsePageProps> = ({ record, onUpdateRecord }) =>
                 { key: "2.17", label: "2.17 [72]" },
                 { key: "2.18", label: "2.18 [65]" },
               ].map((item) => {
-                const isCorrect = record.scales.mmse.items?.[item.key] === 1;
+                const rawVal = record.scales.mmse.items?.[item.key];
+                const isAnswered = rawVal !== undefined;
+                const isCorrect = rawVal === 1;
                 return (
                   <button
                     key={item.key}
                     type="button"
-                    onClick={() => updateMMSEItem(item.key, isCorrect ? 0 : 1)}
-                    className={`flex items-center justify-between rounded-xl border p-2.5 text-left transition ${
-                      isCorrect
+                    onClick={() => {
+                      if (!isAnswered) updateMMSEItem(item.key, 1);
+                      else if (isCorrect) updateMMSEItem(item.key, 0);
+                      else updateMMSEItem(item.key, 1);
+                    }}
+                    className={`flex items-center justify-between rounded-xl border p-2.5 text-left transition cursor-pointer ${
+                      !isAnswered
+                        ? "border-dashed border-slate-200 bg-white text-slate-500 hover:border-teal-300"
+                        : isCorrect
                         ? "border-teal-500 bg-teal-50 font-semibold text-teal-900"
-                        : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                        : "border-slate-300 bg-slate-100 text-slate-700"
                     }`}
                   >
                     <span>{item.label}</span>
                     <span
                       className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${
-                        isCorrect ? "bg-teal-600 text-white" : "bg-white text-slate-500 border border-slate-200"
+                        !isAnswered
+                          ? "bg-slate-100 text-slate-400 border border-slate-200"
+                          : isCorrect
+                          ? "bg-teal-600 text-white"
+                          : "bg-rose-500 text-white"
                       }`}
                     >
-                      {isCorrect ? "1分" : "0分"}
+                      {!isAnswered ? "--" : isCorrect ? "1分" : "0分"}
                     </span>
                   </button>
                 );
@@ -329,25 +456,37 @@ export const MmsePage: React.FC<MmsePageProps> = ({ record, onUpdateRecord }) =>
                 { key: "2.20", label: "2.20 国旗 (回忆)" },
                 { key: "2.21", label: "2.21 树木 (回忆)" },
               ].map((item) => {
-                const isCorrect = record.scales.mmse.items?.[item.key] === 1;
+                const rawVal = record.scales.mmse.items?.[item.key];
+                const isAnswered = rawVal !== undefined;
+                const isCorrect = rawVal === 1;
                 return (
                   <button
                     key={item.key}
                     type="button"
-                    onClick={() => updateMMSEItem(item.key, isCorrect ? 0 : 1)}
-                    className={`flex items-center justify-between rounded-xl border p-2.5 text-left transition ${
-                      isCorrect
+                    onClick={() => {
+                      if (!isAnswered) updateMMSEItem(item.key, 1);
+                      else if (isCorrect) updateMMSEItem(item.key, 0);
+                      else updateMMSEItem(item.key, 1);
+                    }}
+                    className={`flex items-center justify-between rounded-xl border p-2.5 text-left transition cursor-pointer ${
+                      !isAnswered
+                        ? "border-dashed border-slate-200 bg-white text-slate-500 hover:border-teal-300"
+                        : isCorrect
                         ? "border-teal-500 bg-teal-50 font-semibold text-teal-900"
-                        : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                        : "border-slate-300 bg-slate-100 text-slate-700"
                     }`}
                   >
                     <span>{item.label}</span>
                     <span
                       className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${
-                        isCorrect ? "bg-teal-600 text-white" : "bg-white text-slate-500 border border-slate-200"
+                        !isAnswered
+                          ? "bg-slate-100 text-slate-400 border border-slate-200"
+                          : isCorrect
+                          ? "bg-teal-600 text-white"
+                          : "bg-rose-500 text-white"
                       }`}
                     >
-                      {isCorrect ? "1分" : "0分"}
+                      {!isAnswered ? "--" : isCorrect ? "1分" : "0分"}
                     </span>
                   </button>
                 );
@@ -371,25 +510,37 @@ export const MmsePage: React.FC<MmsePageProps> = ({ record, onUpdateRecord }) =>
                 { key: "2.28", label: "2.28 放到左腿上" },
                 { key: "2.29", label: "2.29 独立写出完整句子" },
               ].map((item) => {
-                const isCorrect = record.scales.mmse.items?.[item.key] === 1;
+                const rawVal = record.scales.mmse.items?.[item.key];
+                const isAnswered = rawVal !== undefined;
+                const isCorrect = rawVal === 1;
                 return (
                   <button
                     key={item.key}
                     type="button"
-                    onClick={() => updateMMSEItem(item.key, isCorrect ? 0 : 1)}
-                    className={`flex items-center justify-between rounded-xl border p-2.5 text-left transition ${
-                      isCorrect
+                    onClick={() => {
+                      if (!isAnswered) updateMMSEItem(item.key, 1);
+                      else if (isCorrect) updateMMSEItem(item.key, 0);
+                      else updateMMSEItem(item.key, 1);
+                    }}
+                    className={`flex items-center justify-between rounded-xl border p-2.5 text-left transition cursor-pointer ${
+                      !isAnswered
+                        ? "border-dashed border-slate-200 bg-white text-slate-500 hover:border-teal-300"
+                        : isCorrect
                         ? "border-teal-500 bg-teal-50 font-semibold text-teal-900"
-                        : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                        : "border-slate-300 bg-slate-100 text-slate-700"
                     }`}
                   >
                     <span>{item.label}</span>
                     <span
                       className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${
-                        isCorrect ? "bg-teal-600 text-white" : "bg-white text-slate-500 border border-slate-200"
+                        !isAnswered
+                          ? "bg-slate-100 text-slate-400 border border-slate-200"
+                          : isCorrect
+                          ? "bg-teal-600 text-white"
+                          : "bg-rose-500 text-white"
                       }`}
                     >
-                      {isCorrect ? "1分" : "0分"}
+                      {!isAnswered ? "--" : isCorrect ? "1分" : "0分"}
                     </span>
                   </button>
                 );
@@ -408,19 +559,30 @@ export const MmsePage: React.FC<MmsePageProps> = ({ record, onUpdateRecord }) =>
                   评分标准：必须画出两个五边形（各5个角），且两图交叉形成一个四边形交叉区。
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() =>
-                  updateMMSEItem("2.30", record.scales.mmse.items?.["2.30"] === 1 ? 0 : 1)
-                }
-                className={`rounded-xl px-4 py-2 text-xs font-bold transition shadow-2xs ${
-                  record.scales.mmse.items?.["2.30"] === 1
-                    ? "bg-teal-600 text-white"
-                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                }`}
-              >
-                2.30 构图评分: {record.scales.mmse.items?.["2.30"] === 1 ? "1 分 (符合标准)" : "0 分 (不符)"}
-              </button>
+              {(() => {
+                const val230 = record.scales.mmse.items?.["2.30"];
+                const isAnswered230 = val230 !== undefined;
+                const isCorrect230 = val230 === 1;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isAnswered230) updateMMSEItem("2.30", 1);
+                      else if (isCorrect230) updateMMSEItem("2.30", 0);
+                      else updateMMSEItem("2.30", 1);
+                    }}
+                    className={`rounded-xl px-4 py-2 text-xs font-bold transition shadow-2xs cursor-pointer ${
+                      !isAnswered230
+                        ? "bg-slate-100 text-slate-500 border border-dashed border-slate-300 hover:bg-slate-200"
+                        : isCorrect230
+                        ? "bg-teal-600 text-white hover:bg-teal-700"
+                        : "bg-rose-500 text-white hover:bg-rose-600"
+                    }`}
+                  >
+                    {!isAnswered230 ? "点击判定: 待评定" : isCorrect230 ? "✓ 临摹准确 (1分)" : "✗ 存在错误 (0分)"}
+                  </button>
+                );
+              })()}
             </div>
 
             <InteractiveCanvas
@@ -428,17 +590,90 @@ export const MmsePage: React.FC<MmsePageProps> = ({ record, onUpdateRecord }) =>
               instruction="请受试者在右侧白板临摹左侧的标准双五边形交叉图案。"
               referenceSvgType="dualPentagons"
               savedImage={record.scales.mmse.drawingImage}
-              onSave={(img) =>
+              onSave={(img) => {
                 onUpdateRecord({
                   ...record,
                   scales: {
                     ...record.scales,
                     mmse: { ...record.scales.mmse, drawingImage: img },
                   },
-                })
-              }
+                });
+                triggerSaveFeedback();
+              }}
             />
           </div>
+        </div>
+      </div>
+
+      {/* Action Bar & Save Feedback */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="w-5 h-5 text-teal-600" />
+          <span className="text-xs font-bold text-slate-800">
+            {isMmseStarted
+              ? `已完成 ${mmseAnsweredCount} / 30 项测试，当前总得分：${mmseResult.score} 分`
+              : "MMSE 题目尚未录入，请逐项点击评分"}
+          </span>
+          {saveToast && (
+            <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md animate-fade-in">
+              ✓ 云端实时保存成功
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const fullItems: Record<string, number> = {};
+              for (let i = 1; i <= 30; i++) {
+                fullItems[`2.${i}`] = 1;
+              }
+              onUpdateRecord({
+                ...record,
+                scales: {
+                  ...record.scales,
+                  mmse: { ...record.scales.mmse, items: fullItems },
+                },
+              });
+              triggerSaveFeedback();
+            }}
+            className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 transition"
+            title="一键将MMSE所有题目设为正确（常模满分），再针对性核减错误项"
+          >
+            一键全对(快速录入满分)
+          </button>
+
+          {isMmseStarted && (
+            <button
+              type="button"
+              onClick={() => {
+                onUpdateRecord({
+                  ...record,
+                  scales: {
+                    ...record.scales,
+                    mmse: { ...record.scales.mmse, items: {} },
+                  },
+                });
+                triggerSaveFeedback();
+              }}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-rose-600 transition"
+            >
+              清空重做
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              triggerSaveFeedback();
+              alert(`MMSE 量表测评数据已成功保存！当前得分：${mmseResult.score} 分 (${mmseResult.isAbnormal ? "低于常模界值" : "正常"})。已写入云端数据库。`);
+            }}
+            className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition shadow-xs flex items-center gap-1.5"
+          >
+            <Save className="w-4 h-4" />
+            <span>完成评定并提交保存</span>
+          </button>
         </div>
       </div>
     </div>

@@ -208,19 +208,48 @@ export const DoctorApprovalModal: React.FC<DoctorApprovalModalProps> = ({
                 {/* 1. Patient & AI Summary Card */}
                 <div className="p-4 rounded-xl bg-teal-50/50 border border-teal-200 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-teal-900">
-                      受试者：{currentItem.patientName} (档案号: {currentItem.patientId})
+                    <span className="text-xs font-bold text-teal-900 flex items-center gap-1.5">
+                      <span>受试者：{currentItem.patientName}</span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-teal-100 text-teal-800 font-mono">
+                        第 {currentItem.aiSummary?.version || 1} 版
+                      </span>
                     </span>
                     <span className="text-[11px] font-mono text-teal-700">
-                      生成时间: {currentItem.createdAt?.replace("T", " ").slice(0, 16)}
+                      更新时间: {currentItem.createdAt?.replace("T", " ").slice(0, 16)}
                     </span>
                   </div>
                   <div className="text-xs text-slate-700 leading-relaxed bg-white p-3 rounded-lg border border-teal-100">
-                    <div className="font-bold text-slate-900 mb-1">
-                      【AI 临床综合研判建议】
+                    <div className="font-bold text-slate-900 mb-1 flex items-center justify-between">
+                      <span>【AI 临床最新研判建议】</span>
+                      {currentItem.aiSummary?.versionHistory?.length > 0 && (
+                        <span className="text-[10px] text-slate-400 font-normal">
+                          已历经 {currentItem.aiSummary.versionHistory.length} 次重新研判
+                        </span>
+                      )}
                     </div>
                     <p className="whitespace-pre-wrap">{currentItem.suggestedDiagnosis}</p>
                   </div>
+
+                  {currentItem.aiSummary?.versionHistory?.length > 0 && (
+                    <details className="text-[11px] text-slate-500 bg-white/70 p-2.5 rounded-lg border border-teal-100 cursor-pointer">
+                      <summary className="font-semibold text-teal-800 hover:text-teal-950">
+                        查看历史研判版本对比记录 ({currentItem.aiSummary.versionHistory.length} 条历史)
+                      </summary>
+                      <div className="mt-2 space-y-2 max-h-36 overflow-y-auto pt-1 divide-y divide-slate-100">
+                        {currentItem.aiSummary.versionHistory.map((ver: any, vIdx: number) => (
+                          <div key={vIdx} className="pt-1.5 first:pt-0">
+                            <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                              <span>历史版本 v{ver.version || vIdx + 1}</span>
+                              <span>{ver.createdAt?.replace("T", " ").slice(0, 16)}</span>
+                            </div>
+                            <p className="text-[11px] text-slate-600 mt-0.5 line-clamp-2">
+                              {ver.suggestedDiagnosis}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
                 </div>
 
                 {/* 2. Doctor Final Classification Choice */}

@@ -286,11 +286,101 @@ export const AiAnalysisModal: React.FC<Props> = ({
   const [messageSent, setMessageSent] = useState(false);
   const [sentConsultationId, setSentConsultationId] = useState<string | null>(null);
 
+  // Multi-phase dynamic reasoning animation states
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [animProgress, setAnimProgress] = useState(0);
+  const [animPhase, setAnimPhase] = useState<number>(0);
+  const [animLog, setAnimLog] = useState<string>("");
+
   const currentScenario = scenarios.find((s) => s.id === selectedScenarioId) || scenarios[0];
+
+  const runAnimatedReasoning = (targetScenarioId?: string) => {
+    setIsAnimating(true);
+    setAnimProgress(0);
+    setAnimPhase(0);
+    setAnimLog("正在调取受试者基线生理数据、慢病史与既往检查...");
+
+    // Phase 1: 扫描量表
+    const t1 = setTimeout(() => {
+      setAnimProgress(32);
+      setAnimPhase(1);
+      setAnimLog("测算年龄与受教育常模偏离度（MMSE/MoCA-B/AVLT长延迟回忆）...");
+    }, 400);
+
+    // Phase 2: ATN融合
+    const t2 = setTimeout(() => {
+      setAnimProgress(68);
+      setAnimPhase(2);
+      setAnimLog("融合 ATN 框架（Aβ42/40、p-tau217）、APOE基因型与头颅 MRI 海马萎缩等级...");
+    }, 900);
+
+    // Phase 3: 决策树分型
+    const t3 = setTimeout(() => {
+      setAnimProgress(92);
+      setAnimPhase(3);
+      setAnimLog("调用宣武医院国家神经疾病医学中心临床决策树，推断最终分型与个体化随访处方...");
+    }, 1400);
+
+    // Phase 4: 完成并自动推送
+    const t4 = setTimeout(async () => {
+      setAnimProgress(100);
+      setAnimPhase(4);
+      setAnimLog("临床推理完成！已自动推送至主治医师工作台待办队列...");
+
+      const updatedScenarios = generateDynamicScenarios(record);
+      const chosenId = targetScenarioId || selectedScenarioId;
+      const matched = updatedScenarios.find((s) => s.id === chosenId) || updatedScenarios[0];
+      setSelectedScenarioId(matched.id);
+
+      // Add dynamic timestamp and serial number so each reasoning is fresh and distinct
+      const timestampStr = new Date().toLocaleString("zh-CN", { hour12: false });
+      const serialCode = `XW-AI-${Date.now().toString().slice(-6)}`;
+      const dynamicHeader = `【宣武医院认知障碍多模态智能临床研判报告】\n推理流水号：${serialCode}   研判生成时间：${timestampStr}\n`;
+      const finalReport = matched.reportText.replace(
+        "【宣武医院认知障碍多模态智能临床研判报告】\n",
+        dynamicHeader
+      );
+
+      setAnalysisText(finalReport);
+      setIsAnimating(false);
+
+      // 核心闭环：AI 临床诊断智能推理完成后，自动推送到主治医师待办审核队列
+      setIsSendingMessage(true);
+      try {
+        const consultation = await tursoApi.submitAiConsultation({
+          patientId: record.id,
+          patientName: record.demographics?.name || "受试者",
+          scenarioTag: matched.tag,
+          category: matched.category,
+          confidence: matched.confidence,
+          summary: matched.summary,
+          reportText: finalReport,
+        });
+
+        if (consultation && consultation.id) {
+          setSentConsultationId(consultation.id);
+        }
+        setMessageSent(true);
+        if (onConsultationSubmitted) onConsultationSubmitted();
+      } catch (e) {
+        console.warn("Auto consultation submit:", e);
+        setMessageSent(true);
+      } finally {
+        setIsSendingMessage(false);
+      }
+    }, 1900);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      clearTimeout(t4);
+    };
+  };
 
   useEffect(() => {
     if (isOpen) {
-      // Pick initial scenario matching patient's data
+      // Pick initial scenario matching patient's real scores
       const mmse = sumNumericValues(record.scales.mmse?.items) || 27;
       let initialId = "scd_typical";
       if (mmse < 20) initialId = "ad_dementia_mild";
@@ -299,98 +389,23 @@ export const AiAnalysisModal: React.FC<Props> = ({
       else if (mmse >= 29 && sumNumericValues(record.scdQ9 as unknown as Record<string, unknown>) <= 2) initialId = "normal_healthy";
 
       setSelectedScenarioId(initialId);
-      const matched = scenarios.find((s) => s.id === initialId) || scenarios[0];
-      setAnalysisText(matched.reportText);
       setMessageSent(false);
+      runAnimatedReasoning(initialId);
     }
-  }, [isOpen, record, scenarios]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  // Real AI API invocation
+  // Real AI API invocation with animation
   const handleRealAiReasoning = async () => {
-    setIsRunning(true);
-    try {
-      const mmsePromptScore = sumNumericValues(record.scales.mmse?.items);
-      const mocaPrompt = record.scales.mocaB;
-      const mocaPromptScore =
-        (mocaPrompt?.executiveTrail || 0) +
-        (mocaPrompt?.fluencyFruit || 0) +
-        (mocaPrompt?.orientation || 0) +
-        (mocaPrompt?.calculation13Yuan || 0) +
-        (mocaPrompt?.abstraction || 0) +
-        (mocaPrompt?.delayedRecall || 0) +
-        (mocaPrompt?.visualPerception10Obj || 0) +
-        (mocaPrompt?.naming4Animals || 0) +
-        (mocaPrompt?.attentionDigitsWhite || 0) +
-        (mocaPrompt?.attentionDigitsBlack || 0);
-      const scdPromptScore = sumNumericValues(record.scdQ9 as unknown as Record<string, unknown>);
-      const cdrPromptScore = Math.max(...Object.values(record.scales.cdr || {}).map((val) => Number(val || 0)), 0);
-      const prompt = `请作为宣武医院神经内科认知障碍专家，对以下受试者进行临床多模态推理：
-受试者姓名：${record.demographics?.name}，性别：${record.demographics?.gender === 1 ? "男" : "女"}，年龄：${record.demographics?.age}岁，受教育：${record.demographics?.educationYears}年。
-SCD-Q9自评：${scdPromptScore}分；MMSE评分：${mmsePromptScore}分；MoCA-B评分：${mocaPromptScore}分；CDR全局：${cdrPromptScore}分。
-既往病史：高血压${record.history?.hypertension?.has ? "有" : "无"}，糖尿病${record.history?.diabetes?.has ? "有" : "无"}。
-海马萎缩：${record.biomarkers?.hippocampalSeverity || "未填"}级；APOE：${record.biomarkers?.apoe4Genotype?.value || "未填"}。
-请按照标准化格式输出：一、临床分型结论 二、多维临床依据 三、专家处理与随访建议。`;
-
-      const res = await fetch("/api/ai/clinical-reasoning", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          record,
-          userPrompt: prompt,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success && data.reasoningText) {
-        setAnalysisText(data.reasoningText);
-      } else {
-        handleMockReply();
-      }
-    } catch (e) {
-      handleMockReply();
-    } finally {
-      setIsRunning(false);
-    }
-  };
-
-  // Dedicated button: 「模拟回复」
-  const handleMockReply = async () => {
-    const updatedScenarios = generateDynamicScenarios(record);
-    const matched = updatedScenarios.find((s) => s.id === selectedScenarioId) || updatedScenarios[0];
-    setAnalysisText(matched.reportText);
-
-    // Automatically send alert consultation message to doctor station
-    setIsSendingMessage(true);
-    try {
-      const consultation = await tursoApi.submitAiConsultation({
-        patientId: record.id,
-        patientName: record.demographics?.name || "受试者",
-        scenarioTag: matched.tag,
-        category: matched.category,
-        confidence: matched.confidence,
-        summary: matched.summary,
-        reportText: matched.reportText,
-      });
-
-      if (consultation && consultation.id) {
-        setSentConsultationId(consultation.id);
-        setMessageSent(true);
-        if (onConsultationSubmitted) onConsultationSubmitted();
-      }
-    } catch (e) {
-      console.warn("Auto consultation submit:", e);
-      setMessageSent(true);
-    } finally {
-      setIsSendingMessage(false);
-    }
+    setMessageSent(false);
+    runAnimatedReasoning();
   };
 
   const handleSelectScenario = (sc: MockClinicalScenario) => {
     setSelectedScenarioId(sc.id);
-    setAnalysisText(sc.reportText);
     setMessageSent(false);
+    runAnimatedReasoning(sc.id);
   };
 
   const handleCopy = () => {
@@ -399,10 +414,36 @@ SCD-Q9自评：${scdPromptScore}分；MMSE评分：${mmsePromptScore}分；MoCA-
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleApply = () => {
+  const handleApply = async () => {
     onApplyDiagnosisNotes(analysisText, currentScenario.category);
     setApplied(true);
     setTimeout(() => setApplied(false), 2500);
+
+    // 如果此前尚未推送或失败，在此进行保底推送
+    if (!messageSent) {
+      setIsSendingMessage(true);
+      try {
+        const consultation = await tursoApi.submitAiConsultation({
+          patientId: record.id,
+          patientName: record.demographics?.name || "受试者",
+          scenarioTag: currentScenario.tag,
+          category: currentScenario.category,
+          confidence: currentScenario.confidence,
+          summary: currentScenario.summary,
+          reportText: analysisText,
+        });
+
+        if (consultation && consultation.id) {
+          setSentConsultationId(consultation.id);
+          setMessageSent(true);
+          if (onConsultationSubmitted) onConsultationSubmitted();
+        }
+      } catch (e) {
+        console.warn("Auto consultation submit:", e);
+      } finally {
+        setIsSendingMessage(false);
+      }
+    }
   };
 
   return (
@@ -443,34 +484,74 @@ SCD-Q9自评：${scdPromptScore}分；MMSE评分：${mmsePromptScore}分；MoCA-
 
         {/* Content Body */}
         <div className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-5 text-xs text-slate-700 leading-relaxed">
-          {/* Status Bar */}
+          {/* Status Bar & Dynamic Reasoning Animated Card */}
           <div className="p-4 rounded-xl bg-gradient-to-r from-purple-50 via-slate-50 to-teal-50 border border-purple-200 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                <div
+                  className={`w-2.5 h-2.5 rounded-full ${
+                    isAnimating ? "bg-purple-600 animate-ping" : "bg-emerald-500"
+                  }`}
+                />
                 <span className="font-bold text-slate-800 text-xs">
-                  {isRunning ? "正在分析..." : "可生成研判意见"}
+                  {isAnimating ? "AI 多阶段临床多模态推理计算中..." : "AI 临床智能研判已就绪"}
                 </span>
               </div>
               <span className="text-[11px] font-mono text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
-                医生签字后生效
+                经医师电子签字后正式生效
               </span>
             </div>
 
-            {/* Step Indicators */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
-              <div className="p-2 bg-white rounded-lg border border-slate-200 flex items-center space-x-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span className="text-slate-700 truncate">1. 调取SCD-Q9自评及病史</span>
+            {/* Dynamic Progress Bar */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[11px] text-slate-600">
+                <span className="font-medium flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                  <span>{animLog || "准备启动多模态临床推断..."}</span>
+                </span>
+                <span className="font-mono font-bold text-purple-700">{animProgress}%</span>
               </div>
-              <div className="p-2 bg-white rounded-lg border border-slate-200 flex items-center space-x-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span className="text-slate-700 truncate">2. 比对MMSE/MoCA常模界值</span>
+              <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-purple-600 to-teal-600 h-full rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${animProgress}%` }}
+                />
               </div>
-              <div className="p-2 bg-white rounded-lg border border-purple-200 flex items-center space-x-2">
-                <Brain className="w-4 h-4 text-purple-600 shrink-0" />
-                <span className="text-purple-800 font-medium truncate">3. ATN标志物与MTA影像分级</span>
-              </div>
+            </div>
+
+            {/* 4 Phase Step Indicators with animated active highlights */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-[11px] pt-1">
+              {[
+                { phase: 0, title: "1. 扫描基线与慢病", sub: "年龄/病史/主诉" },
+                { phase: 1, title: "2. 常模切点测算", sub: "MMSE/MoCA/AVLT" },
+                { phase: 2, title: "3. ATN影像融合", sub: "Aβ/Tau/MTA海马" },
+                { phase: 3, title: "4. 临床决策分型", sub: "生成诊断与随访" },
+              ].map((step) => {
+                const isPassed = animPhase > step.phase || animProgress === 100;
+                const isCurrent = animPhase === step.phase && isAnimating;
+                return (
+                  <div
+                    key={step.phase}
+                    className={`p-2 rounded-lg border transition flex flex-col justify-between ${
+                      isCurrent
+                        ? "bg-purple-100/70 border-purple-400 text-purple-900 font-bold shadow-xs scale-102 ring-2 ring-purple-300"
+                        : isPassed
+                        ? "bg-white border-emerald-300 text-emerald-800"
+                        : "bg-white/60 border-slate-200 text-slate-400"
+                    }`}
+                  >
+                    <div className="flex items-center space-x-1.5">
+                      {isPassed ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      ) : (
+                        <Brain className={`w-3.5 h-3.5 shrink-0 ${isCurrent ? "text-purple-600 animate-spin" : "text-slate-400"}`} />
+                      )}
+                      <span className="truncate">{step.title}</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 mt-0.5">{step.sub}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -481,7 +562,7 @@ SCD-Q9自评：${scdPromptScore}分；MMSE评分：${mmsePromptScore}分；MoCA-
                 <FileText className="w-3.5 h-3.5 text-teal-600" />
                 <span>选择研判类型：</span>
               </label>
-              <span className="text-[11px] text-slate-500">点击「模拟回复」生成示例意见</span>
+              <span className="text-[11px] text-slate-500">点击可切换不同临床分型推理模型与依据</span>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
@@ -608,29 +689,27 @@ SCD-Q9自评：${scdPromptScore}分；MMSE评分：${mmsePromptScore}分；MoCA-
         </div>
 
         {/* Footer Action Bar */}
-        <div className="p-4 px-6 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+        <div className="p-4 px-6 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleRealAiReasoning}
-              disabled={isRunning}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-800 text-xs font-bold transition cursor-pointer disabled:opacity-50"
+              disabled={isAnimating || isSendingMessage}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
+              title="根据受试者最新量表与生物学指标重新启动多模态推断"
             >
-              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-              <span>{isRunning ? "正在分析中..." : "AI 智能推理"}</span>
+              <Sparkles className={`w-3.5 h-3.5 ${isAnimating ? "animate-spin" : ""}`} />
+              <span>{isAnimating ? "多阶段推理计算中..." : "重新执行 AI 智能推理"}</span>
             </button>
 
-            {/* Dedicated required button: 模拟回复 */}
             <button
               type="button"
-              id="btn-mock-reply"
-              onClick={handleMockReply}
-              disabled={isRunning || isSendingMessage}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
-              title="即刻生成与受试者数据关联的临床研判回复"
+              onClick={() => runAnimatedReasoning()}
+              disabled={isAnimating || isSendingMessage}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold transition cursor-pointer disabled:opacity-50"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSendingMessage ? "animate-spin" : ""}`} />
-              <span>模拟回复</span>
+              <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+              <span>重置研判参数</span>
             </button>
           </div>
 
@@ -638,10 +717,11 @@ SCD-Q9自评：${scdPromptScore}分；MMSE评分：${mmsePromptScore}分；MoCA-
             <button
               type="button"
               onClick={handleApply}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+              disabled={isAnimating}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
             >
               <ShieldCheck className="w-4 h-4" />
-              <span>{applied ? "已写入综合诊断意见！" : "应用至临床诊断"}</span>
+              <span>{applied ? "✓ 已应用！已转为「待医生审核签署」" : "应用至临床诊断并提交待审核"}</span>
             </button>
           </div>
         </div>

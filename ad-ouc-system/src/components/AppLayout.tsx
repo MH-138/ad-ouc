@@ -393,8 +393,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 title="导入病历或影像检查报告"
               >
                 <Camera className="w-3.5 h-3.5 text-teal-600" />
-                <span className="hidden sm:inline">上传模拟文档</span>
-                <span className="sm:hidden">文档</span>
+                <span className="hidden sm:inline">上传病历/化验单(OCR)</span>
+                <span className="sm:hidden">病历化验单</span>
               </button>
 
               {/* 4. Doctor Station Badge */}

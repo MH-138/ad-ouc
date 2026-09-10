@@ -307,14 +307,15 @@ export const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
             <span>{isAnalyzing ? "识别中..." : "AI 智能识别"}</span>
           </button>
 
-          {/* Dedicated required button: 模拟回复 */}
+          {/* Dedicated required button: 标准示例答卷 */}
           <button
             type="button"
             onClick={handleMockReply}
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition shadow-2xs cursor-pointer"
+            title="载入临床标准的规范书写/绘图示例"
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>模拟回复</span>
+            <span>标准示例答卷</span>
           </button>
         </div>
       </div>

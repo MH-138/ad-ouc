@@ -143,15 +143,15 @@ export interface SubjectRecord {
 
   // Section D: SCD-Q9 (Subjective Cognitive Decline 9 items)
   scdQ9: {
-    q1: 0 | 1; // 记忆问题
-    q2: 0 | 1; // 3-5天前对话
-    q3: 0 | 1; // 近两年记忆问题
-    q4: 0 | 0.5 | 1; // 重要日期 (0从未, 0.5偶尔, 1经常)
-    q5: 0 | 0.5 | 1; // 常用号码
-    q6: 0 | 1; // 做事说话易忘
-    q7: 0 | 0.5 | 1; // 商店买东西忘
-    q8: 0 | 1; // 比5年前差
-    q9: 0 | 1; // 东西放哪记不住
+    q1: number; // 记忆问题
+    q2: number; // 3-5天前对话
+    q3: number; // 近两年记忆问题
+    q4: number; // 重要日期 (0从未, 0.5偶尔, 1经常)
+    q5: number; // 常用号码
+    q6: number; // 做事说话易忘
+    q7: number; // 商店买东西忘
+    q8: number; // 比5年前差
+    q9: number; // 东西放哪记不住
   };
 
   // Section E: SCD Structured Interview
@@ -474,14 +474,25 @@ export interface SubjectRecord {
 
   // Section J: Diagnosis
   diagnosis: {
-    category: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9; // 1: SCD, 2: aMCI, 3: AD, 4: NC, 5: svMCI, 6: FTD, 7: Depression, 8: FAD, 9: DLB
+    category?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9; // 0: 待评估/未诊断, 1: SCD, 2: aMCI, 3: AD, 4: NC, 5: svMCI, 6: FTD, 7: Depression, 8: FAD, 9: DLB
     notes?: string;
+    approvalStatus?: "none" | "pending" | "approved" | "rejected";
+    evaluatorSignature?: string;
+    approvedAt?: string;
+    versionHistory?: Array<{
+      version: number;
+      category?: number;
+      notes: string;
+      createdAt: string;
+      evaluatorSignature?: string;
+    }>;
   };
 
   // Section K: Follow-up & Sign
   followUp: {
     nextVisitDate: string;
     evaluatorSignature: string;
+    signDate?: string;
   };
 }
 

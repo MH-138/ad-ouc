@@ -103,9 +103,10 @@ export function exportRecordToExcel(record: SubjectRecord, options: ExportOption
   const diagnosisData = [
     ["项目", "评估内容与专家建议"],
     ["初步临床诊断分型", getDiagnosisName(record.diagnosis?.category)],
-    ["诊断依据要点", record.diagnosis?.notes || "结合主客观量表分离、常模比对及日常生活能力综合判定"],
+    ["医师审核签署状态", record.diagnosis?.approvalStatus === "approved" ? "已签署审核 (正式生效)" : record.diagnosis?.approvalStatus === "pending" ? "待主治医师审核签字" : "待评估 / 未开展"],
+    ["诊断依据要点与随访医嘱", record.diagnosis?.notes || "尚未出具详细随访医嘱"],
     ["建议随访周期", record.followUp?.nextVisitDate ? `下次建议随访时间: ${record.followUp.nextVisitDate}` : "建议 6-12 个月进行一次纵向认知随访"],
-    ["主试签名", record.followUp?.evaluatorSignature || record.evaluator || "韩璎教授研究组"],
+    ["主试/签名医生", record.followUp?.evaluatorSignature || record.evaluator || "韩璎教授研究组"],
     ["导出时间", new Date().toLocaleString("zh-CN")],
   ];
 

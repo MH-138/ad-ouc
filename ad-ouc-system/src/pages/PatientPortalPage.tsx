@@ -17,10 +17,16 @@ import {
   Sparkles,
   ChevronRight,
   ShieldCheck,
+  X,
+  Smile,
+  Moon,
+  Check,
 } from "lucide-react";
 import { SubjectRecord } from "../types/assessment";
 import { tts } from "../utils/ttsHelper";
 import { tursoApi } from "../services/tursoApi";
+import { GDS15_ITEMS } from "../data/assessmentStimuli";
+import { calculateSCDQ9, calculateGDS15, calculatePSQI } from "../utils/scoringCalculators";
 
 interface QuestionItem {
   id: string;
@@ -59,7 +65,14 @@ export const PatientPortalPage: React.FC<PatientPortalPageProps> = ({
   onReturnToPortal,
 }) => {
   const [activeTab, setActiveTab] = useState<"survey" | "my_health">("survey");
-  const [currentIdx, setCurrentIdx] = useState(0);
+  // 当前选择的自评量表：SCD主观认知、GDS情绪心理、PSQI睡眠生活
+  const [selectedSurvey, setSelectedSurvey] = useState<"scd" | "gds" | "psqi">("scd");
+
+  // SCD 答题状态
+  const [scdIdx, setScdIdx] = useState(0);
+  // GDS 答题状态
+  const [gdsIdx, setGdsIdx] = useState(0);
+
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [newDemographics, setNewDemographics] = useState({
@@ -75,12 +88,17 @@ export const PatientPortalPage: React.FC<PatientPortalPageProps> = ({
 
   // Load existing answers
   const scdAnswers: Record<string, string | number> = record.scdInterview?.patientSCD || {};
-
-  // All survey items (9 core questions + 6 scenarios)
-  const allQuestions = SCD_QUESTIONS;
-
-  const currentQ = allQuestions[currentIdx];
-  const isLastQ = currentIdx === allQuestions.length - 1;
+  const gdsAnswers: Record<number, boolean> = record.scales?.gds15?.answers || {};
+  const psqiState = record.scales?.psqi || {
+    bedTime: "22:30",
+    sleepLatencyMinutes: 20,
+    wakeTime: "06:30",
+    actualSleepHours: 7,
+    troubles: {},
+    selfQuality: 1,
+    medication: 0,
+    daytimeDysfunction: 0,
+  };
 
   // Track TTS
   useEffect(() => {
@@ -90,7 +108,7 @@ export const PatientPortalPage: React.FC<PatientPortalPageProps> = ({
     };
   }, []);
 
-  // Save changes to cloud database
+  // Save changes to cloud database and broadcast to global state
   const persistChanges = async (updated: SubjectRecord) => {
     onUpdateRecord(updated);
     setSaveSuccess(true);
@@ -113,6 +131,8 @@ export const PatientPortalPage: React.FC<PatientPortalPageProps> = ({
       await tursoApi.saveDraft(updated.id, "patient", {
         updatedAt: new Date().toISOString(),
         scdInterview: updated.scdInterview,
+        scdQ9: updated.scdQ9,
+        scales: updated.scales,
       });
     } catch (e) {
       console.warn("Patient cloud save fallback:", e);
@@ -140,35 +160,40 @@ export const PatientPortalPage: React.FC<PatientPortalPageProps> = ({
     persistChanges(updated);
   };
 
-  // Answer a question
-  const handleAnswer = (val: string) => {
+  // ================= 1. SCD-Q9 作答与全系统数据自动同步 =================
+  const currentScdQ = SCD_QUESTIONS[scdIdx];
+  const isLastScdQ = scdIdx === SCD_QUESTIONS.length - 1;
+
+  const handleScdAnswer = (val: string) => {
     tts.stop();
     const updatedAnswers = {
       ...scdAnswers,
-      [currentQ.id]: val,
+      [currentScdQ.id]: val,
     };
 
-    // Check whether all core questions are answered
+    // 同步更新主干 record.scdQ9（q1 到 q9）
+    const qKeyMap: Record<string, keyof SubjectRecord["scdQ9"]> = {
+      q1: "q1", q2: "q2", q3: "q3", q4: "q4", q5: "q5",
+      q6: "q6", q7: "q7", q8: "q8", q9: "q9",
+    };
+
+    const nextScdQ9 = { ...(record.scdQ9 || {}) } as SubjectRecord["scdQ9"];
+    Object.keys(updatedAnswers).forEach((key) => {
+      const field = qKeyMap[key];
+      if (field) {
+        nextScdQ9[field] = updatedAnswers[key] === "yes" ? 1 : 0;
+      }
+    });
+
+    // 自动调用算法计算分值
     const coreQuestions = SCD_QUESTIONS.filter((q) => q.type === "core");
     const answeredCoreCount = coreQuestions.filter((q) => updatedAnswers[q.id] !== undefined).length;
     const isCompleted = answeredCoreCount === coreQuestions.length;
-
-    // Calculate score strictly only when completed; otherwise keep null
-    let calculatedScore: number | null = null;
-    let isPos = false;
-    if (isCompleted) {
-      let scoreSum = 0;
-      coreQuestions.forEach((item) => {
-        if (updatedAnswers[item.id] === "yes") {
-          scoreSum += 1;
-        }
-      });
-      calculatedScore = scoreSum;
-      isPos = scoreSum >= 5;
-    }
+    const { score: calcScore, isPositive: calcPos } = calculateSCDQ9(nextScdQ9);
 
     const updated: SubjectRecord = {
       ...record,
+      scdQ9: nextScdQ9,
       scdInterview: {
         ...record.scdInterview,
         patientSCD: updatedAnswers,
@@ -178,26 +203,21 @@ export const PatientPortalPage: React.FC<PatientPortalPageProps> = ({
         scdQ9: {
           ...record.scales.scdQ9,
           status: isCompleted ? "completed" : "in_progress",
-          score: calculatedScore,
-          isPositive: isPos,
+          score: calcScore,
+          isPositive: calcPos,
         },
       },
     };
 
     persistChanges(updated);
 
-    if (!isLastQ) {
-      setCurrentIdx((prev) => prev + 1);
+    if (!isLastScdQ) {
+      setScdIdx((prev) => prev + 1);
     }
   };
 
-  // Skip single question (recorded as 'skipped', score not counted)
-  const handleSkip = () => {
-    handleAnswer("skipped");
-  };
-
-  // Skip entire self-assessment module strictly recorded as skipped with null score
-  const handleSkipEntireAssessment = () => {
+  // 跳过 SCD 自评
+  const handleSkipEntireScd = () => {
     tts.stop();
     const updated: SubjectRecord = {
       ...record,
@@ -214,18 +234,88 @@ export const PatientPortalPage: React.FC<PatientPortalPageProps> = ({
     persistChanges(updated);
   };
 
-  // Read question aloud
-  const handleReadQuestion = () => {
-    if (!currentQ) return;
-    const textToRead = `${currentQ.title}。${currentQ.hint || ""}`;
-    tts.speak(`scd_q_${currentQ.id}`, textToRead);
+  // ================= 2. GDS-15 情绪心理自评与全系统数据自动同步 =================
+  const currentGdsQ = GDS15_ITEMS[gdsIdx];
+  const isLastGdsQ = gdsIdx === GDS15_ITEMS.length - 1;
+
+  const handleGdsAnswer = (val: boolean) => {
+    tts.stop();
+    const nextAnswers = {
+      ...gdsAnswers,
+      [currentGdsQ.id]: val,
+    };
+
+    const gdsResult = calculateGDS15(nextAnswers);
+
+    const updated: SubjectRecord = {
+      ...record,
+      scales: {
+        ...record.scales,
+        gds15: {
+          answers: nextAnswers,
+        },
+      },
+    };
+
+    persistChanges(updated);
+
+    if (!isLastGdsQ) {
+      setGdsIdx((prev) => prev + 1);
+    }
   };
 
-  // Calculate stats for My Health Tab (strictly conforming to patient view boundaries)
-  const scdStatus = record.scales?.scdQ9?.status || (Object.keys(scdAnswers).length > 0 ? "in_progress" : "not_started");
-  const scdScore = record.scales?.scdQ9?.score ?? null;
-  const isScdPositive = scdScore !== null && scdScore >= 5;
-  const doctorNotes = record.diagnosis?.notes || "健康生活方式建议：保持规律作息、清淡地中海饮食、每日坚持30分钟轻度有氧活动与认知锻炼。";
+  // ================= 3. PSQI 睡眠生活自评与数据自动同步 =================
+  const handleUpdatePsqi = (patch: Partial<SubjectRecord["scales"]["psqi"]>) => {
+    const nextPsqi = { ...psqiState, ...patch };
+    const psqiCalc = calculatePSQI(nextPsqi);
+
+    const updated: SubjectRecord = {
+      ...record,
+      scales: {
+        ...record.scales,
+        psqi: nextPsqi,
+      },
+    };
+
+    persistChanges(updated);
+  };
+
+  // 语音播报
+  const handleReadScdQuestion = () => {
+    if (!currentScdQ) return;
+    const textToRead = `${currentScdQ.title}。${currentScdQ.hint || ""}`;
+    tts.speak(`scd_q_${currentScdQ.id}`, textToRead);
+  };
+
+  const handleReadGdsQuestion = () => {
+    if (!currentGdsQ) return;
+    tts.speak(`gds_q_${currentGdsQ.id}`, currentGdsQ.text);
+  };
+
+  // Calculate stats for My Health Tab
+  const [isFollowUpModalOpen, setIsFollowUpModalOpen] = useState(false);
+  const hasScdAnswered = Boolean(
+    (record.scdQ9 && Object.values(record.scdQ9).some((v) => typeof v === "number")) ||
+    (record.scdInterview?.patientSCD && Object.keys(record.scdInterview.patientSCD).length > 0)
+  );
+  const scdStatus = record.scales?.scdQ9?.status || (hasScdAnswered ? "in_progress" : "not_started");
+  const scdScore = hasScdAnswered
+    ? (record.scales?.scdQ9?.score ?? calculateSCDQ9(record.scdQ9).score)
+    : null;
+  const isScdPositive = scdScore !== null ? scdScore >= 5 : false;
+
+  const gdsAnsweredCount = Object.keys(gdsAnswers).length;
+  const gdsScoreResult = calculateGDS15(gdsAnswers);
+  const hasPsqiAnswered = Boolean(
+    record.scales?.psqi && (
+      (record.scales.psqi.troubles && Object.keys(record.scales.psqi.troubles).length > 0) ||
+      record.scales.psqi.selfQuality !== undefined
+    )
+  );
+  const psqiScoreResult = calculatePSQI(record.scales?.psqi);
+
+  const hasDoctorNotes = Boolean(record.diagnosis?.notes && record.diagnosis.notes.trim() !== "");
+  const doctorNotes = record.diagnosis?.notes || "";
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans selection:bg-teal-500 selection:text-white">
@@ -402,146 +492,434 @@ export const PatientPortalPage: React.FC<PatientPortalPageProps> = ({
             </form>
           </div>
         ) : activeTab === "survey" ? (
-          /* 情况 B：受试者已建档，直接进入 SCD-Q9 自评 */
-          <div className="flex-1 flex flex-col justify-between bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-            {/* 顶部进度条 */}
-            <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="px-3 py-1 rounded-full bg-teal-50 text-teal-800 text-xs font-bold border border-teal-200">
-                  {currentQ.type === "core" ? "核心自评" : "生活情景"}
-                </span>
-                <span className="text-xs text-slate-400 font-bold">
-                  第 {currentIdx + 1} 题 / 共 {allQuestions.length} 题
-                </span>
-              </div>
+          /* 情况 B：受试者已建档，提供三大量表自评切换 */
+          <div className="flex-1 flex flex-col space-y-4">
+            {/* 三大自评量表选择栏 */}
+            <div className="grid grid-cols-3 gap-2.5 sm:gap-3 bg-white p-2 rounded-2xl border border-slate-200 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setSelectedSurvey("scd")}
+                className={`p-3 rounded-xl text-left transition flex items-center justify-between ${
+                  selectedSurvey === "scd"
+                    ? "bg-teal-50 border-2 border-teal-600 text-teal-900 shadow-2xs"
+                    : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-transparent"
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-800 flex items-center justify-center font-bold">
+                    <Brain className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs sm:text-sm font-bold">1. SCD-Q9 记忆自评</div>
+                    <div className="text-[11px] text-slate-500">
+                      {scdStatus === "completed"
+                        ? `已完成 (${scdScore !== null ? `${scdScore}分` : "--"})`
+                        : `${Object.keys(scdAnswers).length} / 15 题`}
+                    </div>
+                  </div>
+                </div>
+                {scdStatus === "completed" && (
+                  <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0" />
+                )}
+              </button>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleReadQuestion}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition ${
-                    speakingId === `scd_q_${currentQ.id}`
-                      ? "bg-teal-600 text-white border-teal-600 animate-pulse"
-                      : "bg-teal-50 hover:bg-teal-100 text-teal-800 border-teal-200"
-                  }`}
-                >
-                  {speakingId === `scd_q_${currentQ.id}` ? (
-                    <>
-                      <VolumeX className="w-3.5 h-3.5" />
-                      <span>停止朗读</span>
-                    </>
-                  ) : (
-                    <>
-                      <Volume2 className="w-3.5 h-3.5" />
-                      <span>🔊 语音读题</span>
-                    </>
+              <button
+                type="button"
+                onClick={() => setSelectedSurvey("gds")}
+                className={`p-3 rounded-xl text-left transition flex items-center justify-between ${
+                  selectedSurvey === "gds"
+                    ? "bg-amber-50 border-2 border-amber-600 text-amber-900 shadow-2xs"
+                    : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-transparent"
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-bold">
+                    <Smile className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs sm:text-sm font-bold">2. GDS-15 情绪心理</div>
+                    <div className="text-[11px] text-slate-500">
+                      {gdsAnsweredCount === 15
+                        ? `已完成 (${gdsScoreResult.score}分)`
+                        : `${gdsAnsweredCount} / 15 题`}
+                    </div>
+                  </div>
+                </div>
+                {gdsAnsweredCount === 15 && (
+                  <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedSurvey("psqi")}
+                className={`p-3 rounded-xl text-left transition flex items-center justify-between ${
+                  selectedSurvey === "psqi"
+                    ? "bg-indigo-50 border-2 border-indigo-600 text-indigo-900 shadow-2xs"
+                    : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-transparent"
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-800 flex items-center justify-center font-bold">
+                    <Moon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs sm:text-sm font-bold">3. PSQI 睡眠生活</div>
+                    <div className="text-[11px] text-slate-500">
+                      {psqiScoreResult.score > 0 ? `评分: ${psqiScoreResult.score}分` : "作息与质量"}
+                    </div>
+                  </div>
+                </div>
+                {psqiScoreResult.score > 0 && (
+                  <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" />
+                )}
+              </button>
+            </div>
+
+            {/* 问卷一：SCD-Q9 主观记忆自评 */}
+            {selectedSurvey === "scd" && (
+              <div className="flex-1 flex flex-col justify-between bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden min-h-[460px]">
+                <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="px-3 py-1 rounded-full bg-teal-50 text-teal-800 text-xs font-bold border border-teal-200">
+                      {currentScdQ.type === "core" ? "SCD核心自评" : "生活情景题"}
+                    </span>
+                    <span className="text-xs text-slate-400 font-bold">
+                      第 {scdIdx + 1} 题 / 共 {SCD_QUESTIONS.length} 题
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleReadScdQuestion}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition ${
+                      speakingId === `scd_q_${currentScdQ.id}`
+                        ? "bg-teal-600 text-white border-teal-600 animate-pulse"
+                        : "bg-teal-50 hover:bg-teal-100 text-teal-800 border-teal-200"
+                    }`}
+                  >
+                    {speakingId === `scd_q_${currentScdQ.id}` ? (
+                      <>
+                        <VolumeX className="w-3.5 h-3.5" />
+                        <span>停止朗读</span>
+                      </>
+                    ) : (
+                      <>
+                        <Volume2 className="w-3.5 h-3.5" />
+                        <span>🔊 语音读题</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="w-full bg-slate-100 h-1.5">
+                  <div
+                    className="bg-teal-600 h-1.5 transition-all duration-300"
+                    style={{ width: `${((scdIdx + 1) / SCD_QUESTIONS.length) * 100}%` }}
+                  />
+                </div>
+
+                <div className="flex-1 p-6 sm:p-10 flex flex-col justify-center max-w-2xl mx-auto w-full text-center space-y-4">
+                  <div className="text-2xl sm:text-3xl font-bold text-slate-900 leading-snug tracking-tight">
+                    {currentScdQ.title}
+                  </div>
+                  {currentScdQ.hint && (
+                    <p className="text-base text-slate-500 leading-relaxed max-w-lg mx-auto">
+                      {currentScdQ.hint}
+                    </p>
                   )}
-                </button>
+
+                  {scdAnswers[currentScdQ.id] && (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-medium mx-auto mt-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />
+                      <span>
+                        当前已选：
+                        {scdAnswers[currentScdQ.id] === "yes"
+                          ? "是 (有此感觉)"
+                          : scdAnswers[currentScdQ.id] === "no"
+                          ? "否 (没有)"
+                          : "已跳过"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-slate-200 bg-slate-50 p-4 sm:p-6">
+                  <div className="max-w-2xl mx-auto space-y-3">
+                    <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                      <button
+                        type="button"
+                        onClick={() => handleScdAnswer("yes")}
+                        className={`py-4 sm:py-5 rounded-2xl font-bold text-lg sm:text-xl transition shadow-xs flex items-center justify-center gap-2 active:scale-98 ${
+                          scdAnswers[currentScdQ.id] === "yes"
+                            ? "bg-teal-600 text-white ring-4 ring-teal-200"
+                            : "bg-white hover:bg-teal-50 text-teal-900 border-2 border-teal-500"
+                        }`}
+                      >
+                        <span>是 (有明显感觉)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleScdAnswer("no")}
+                        className={`py-4 sm:py-5 rounded-2xl font-bold text-lg sm:text-xl transition shadow-xs flex items-center justify-center gap-2 active:scale-98 ${
+                          scdAnswers[currentScdQ.id] === "no"
+                            ? "bg-slate-700 text-white ring-4 ring-slate-200"
+                            : "bg-white hover:bg-slate-100 text-slate-700 border-2 border-slate-300"
+                        }`}
+                      >
+                        <span>否 (未出现 / 正常)</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2">
+                      <button
+                        type="button"
+                        disabled={scdIdx === 0}
+                        onClick={() => setScdIdx((prev) => Math.max(0, prev - 1))}
+                        className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 disabled:opacity-30 transition"
+                      >
+                        ← 上一题
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleScdAnswer("skipped")}
+                        className="px-4 py-2 rounded-xl text-xs font-bold text-amber-700 hover:bg-amber-50 transition border border-amber-200 bg-white"
+                      >
+                        跳过此题
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isLastScdQ}
+                        onClick={() => setScdIdx((prev) => Math.min(SCD_QUESTIONS.length - 1, prev + 1))}
+                        className="px-4 py-2 rounded-xl text-xs font-bold text-teal-700 hover:text-teal-900 disabled:opacity-30 transition"
+                      >
+                        下一题 →
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* 进度条指示 */}
-            <div className="w-full bg-slate-100 h-1.5">
-              <div
-                className="bg-teal-600 h-1.5 transition-all duration-300"
-                style={{
-                  width: `${((currentIdx + 1) / allQuestions.length) * 100}%`,
-                }}
-              />
-            </div>
+            {/* 问卷二：GDS-15 情绪与心理自评 */}
+            {selectedSurvey === "gds" && (
+              <div className="flex-1 flex flex-col justify-between bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden min-h-[460px]">
+                <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-800 text-xs font-bold border border-amber-200">
+                      GDS-15 近一周情绪自评
+                    </span>
+                    <span className="text-xs text-slate-400 font-bold">
+                      第 {gdsIdx + 1} 题 / 共 15 题
+                    </span>
+                  </div>
 
-            {/* 题目展示区（适老超大字体） */}
-            <div className="flex-1 p-6 sm:p-10 flex flex-col justify-center max-w-2xl mx-auto w-full text-center space-y-4">
-              <div className="text-2xl sm:text-3xl font-bold text-slate-900 leading-snug tracking-tight">
-                {currentQ.title}
+                  <button
+                    type="button"
+                    onClick={handleReadGdsQuestion}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition ${
+                      speakingId === `gds_q_${currentGdsQ.id}`
+                        ? "bg-amber-600 text-white border-amber-600 animate-pulse"
+                        : "bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200"
+                    }`}
+                  >
+                    {speakingId === `gds_q_${currentGdsQ.id}` ? (
+                      <>
+                        <VolumeX className="w-3.5 h-3.5" />
+                        <span>停止朗读</span>
+                      </>
+                    ) : (
+                      <>
+                        <Volume2 className="w-3.5 h-3.5" />
+                        <span>🔊 语音读题</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="w-full bg-slate-100 h-1.5">
+                  <div
+                    className="bg-amber-500 h-1.5 transition-all duration-300"
+                    style={{ width: `${((gdsIdx + 1) / 15) * 100}%` }}
+                  />
+                </div>
+
+                <div className="flex-1 p-6 sm:p-10 flex flex-col justify-center max-w-2xl mx-auto w-full text-center space-y-4">
+                  <div className="text-2xl sm:text-3xl font-bold text-slate-900 leading-snug tracking-tight">
+                    {currentGdsQ.text}
+                  </div>
+                  <p className="text-base text-slate-500 leading-relaxed max-w-lg mx-auto">
+                    请根据您最近一星期的实际心情感受如实选择
+                  </p>
+
+                  {gdsAnswers[currentGdsQ.id] !== undefined && (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-medium mx-auto mt-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-amber-600" />
+                      <span>当前已选：{gdsAnswers[currentGdsQ.id] ? "是" : "否"}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-slate-200 bg-slate-50 p-4 sm:p-6">
+                  <div className="max-w-2xl mx-auto space-y-3">
+                    <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                      <button
+                        type="button"
+                        onClick={() => handleGdsAnswer(true)}
+                        className={`py-4 sm:py-5 rounded-2xl font-bold text-lg sm:text-xl transition shadow-xs flex items-center justify-center gap-2 active:scale-98 ${
+                          gdsAnswers[currentGdsQ.id] === true
+                            ? "bg-amber-600 text-white ring-4 ring-amber-200"
+                            : "bg-white hover:bg-amber-50 text-amber-900 border-2 border-amber-500"
+                        }`}
+                      >
+                        <span>是</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleGdsAnswer(false)}
+                        className={`py-4 sm:py-5 rounded-2xl font-bold text-lg sm:text-xl transition shadow-xs flex items-center justify-center gap-2 active:scale-98 ${
+                          gdsAnswers[currentGdsQ.id] === false
+                            ? "bg-slate-700 text-white ring-4 ring-slate-200"
+                            : "bg-white hover:bg-slate-100 text-slate-700 border-2 border-slate-300"
+                        }`}
+                      >
+                        <span>否</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2">
+                      <button
+                        type="button"
+                        disabled={gdsIdx === 0}
+                        onClick={() => setGdsIdx((prev) => Math.max(0, prev - 1))}
+                        className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 disabled:opacity-30 transition"
+                      >
+                        ← 上一题
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isLastGdsQ}
+                        onClick={() => setGdsIdx((prev) => Math.min(14, prev + 1))}
+                        className="px-4 py-2 rounded-xl text-xs font-bold text-amber-700 hover:text-amber-900 disabled:opacity-30 transition"
+                      >
+                        下一题 →
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
-              {currentQ.hint && (
-                <p className="text-base text-slate-500 leading-relaxed max-w-lg mx-auto">
-                  {currentQ.hint}
-                </p>
-              )}
+            )}
 
-              {/* 当前题已答提示 */}
-              {scdAnswers[currentQ.id] && (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-medium mx-auto mt-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />
-                  <span>
-                    当前已选：
-                    {scdAnswers[currentQ.id] === "yes"
-                      ? "是 (有此感觉)"
-                      : scdAnswers[currentQ.id] === "no"
-                      ? "否 (没有)"
-                      : scdAnswers[currentQ.id] === "skipped"
-                      ? "已跳过"
-                      : "不确定"}
+            {/* 问卷三：PSQI 睡眠质量与作息自评 */}
+            {selectedSurvey === "psqi" && (
+              <div className="flex-1 bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">PSQI 匹兹堡睡眠质量与生活习惯自评</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">请根据您近一个月的实际睡眠情况选择填写</p>
+                  </div>
+                  <span className="text-xs font-bold text-indigo-800 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200">
+                    当前睡眠评分：{psqiScoreResult.score} 分 ({psqiScoreResult.qualityText})
                   </span>
                 </div>
-              )}
-            </div>
 
-            {/* 底部固定大按钮回答甲板 (Sticky Bottom Deck) */}
-            <div className="border-t border-slate-200 bg-slate-50 p-4 sm:p-6">
-              <div className="max-w-2xl mx-auto space-y-3">
-                <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                  <button
-                    type="button"
-                    onClick={() => handleAnswer("yes")}
-                    className={`py-4 sm:py-5 rounded-2xl font-bold text-lg sm:text-xl transition shadow-xs flex items-center justify-center gap-2 active:scale-98 ${
-                      scdAnswers[currentQ.id] === "yes"
-                        ? "bg-teal-600 text-white ring-4 ring-teal-200"
-                        : "bg-white hover:bg-teal-50 text-teal-900 border-2 border-teal-500"
-                    }`}
-                  >
-                    <span>是 (有明显感觉)</span>
-                  </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 text-sm">
+                  <div className="space-y-2">
+                    <label className="font-bold text-slate-700 block">1. 通常晚上几点上床睡觉？</label>
+                    <input
+                      type="time"
+                      value={psqiState.bedTime}
+                      onChange={(e) => handleUpdatePsqi({ bedTime: e.target.value })}
+                      className="w-full p-3 rounded-xl border border-slate-300 text-base font-medium"
+                    />
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => handleAnswer("no")}
-                    className={`py-4 sm:py-5 rounded-2xl font-bold text-lg sm:text-xl transition shadow-xs flex items-center justify-center gap-2 active:scale-98 ${
-                      scdAnswers[currentQ.id] === "no"
-                        ? "bg-slate-700 text-white ring-4 ring-slate-200"
-                        : "bg-white hover:bg-slate-100 text-slate-700 border-2 border-slate-300"
-                    }`}
-                  >
-                    <span>否 (未出现 / 正常)</span>
-                  </button>
-                </div>
+                  <div className="space-y-2">
+                    <label className="font-bold text-slate-700 block">2. 通常早上几点起床？</label>
+                    <input
+                      type="time"
+                      value={psqiState.wakeTime}
+                      onChange={(e) => handleUpdatePsqi({ wakeTime: e.target.value })}
+                      className="w-full p-3 rounded-xl border border-slate-300 text-base font-medium"
+                    />
+                  </div>
 
-                <div className="flex items-center justify-between pt-2">
-                  <button
-                    type="button"
-                    disabled={currentIdx === 0}
-                    onClick={() => setCurrentIdx((prev) => Math.max(0, prev - 1))}
-                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 disabled:opacity-30 transition"
-                  >
-                    ← 上一题
-                  </button>
+                  <div className="space-y-2">
+                    <label className="font-bold text-slate-700 block">3. 关灯到睡着通常需要多少分钟？</label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[15, 30, 45, 60].map((mins) => (
+                        <button
+                          key={mins}
+                          type="button"
+                          onClick={() => handleUpdatePsqi({ sleepLatencyMinutes: mins })}
+                          className={`p-2.5 rounded-xl border text-xs font-bold transition ${
+                            psqiState.sleepLatencyMinutes === mins
+                              ? "bg-indigo-600 text-white border-indigo-600"
+                              : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                          }`}
+                        >
+                          {mins === 60 ? ">60分钟" : `≤${mins}分钟`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={handleSkip}
-                    className="px-4 py-2 rounded-xl text-xs font-bold text-amber-700 hover:bg-amber-50 transition border border-amber-200 bg-white"
-                  >
-                    跳过此题 (暂不清楚)
-                  </button>
+                  <div className="space-y-2">
+                    <label className="font-bold text-slate-700 block">4. 每夜实际睡眠时间大约几个小时？</label>
+                    <div className="grid grid-cols-5 gap-2">
+                      {[5, 6, 7, 8, 9].map((hours) => (
+                        <button
+                          key={hours}
+                          type="button"
+                          onClick={() => handleUpdatePsqi({ actualSleepHours: hours })}
+                          className={`p-2.5 rounded-xl border text-xs font-bold transition ${
+                            psqiState.actualSleepHours === hours
+                              ? "bg-indigo-600 text-white border-indigo-600"
+                              : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                          }`}
+                        >
+                          {hours} 小时
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-                  <button
-                    type="button"
-                    disabled={isLastQ}
-                    onClick={() => setCurrentIdx((prev) => Math.min(allQuestions.length - 1, prev + 1))}
-                    className="px-4 py-2 rounded-xl text-xs font-bold text-teal-700 hover:text-teal-900 disabled:opacity-30 transition"
-                  >
-                    下一题 →
-                  </button>
+                  <div className="space-y-2 sm:col-span-2">
+                    <label className="font-bold text-slate-700 block">5. 自评近 1 个月总体睡眠质量：</label>
+                    <div className="grid grid-cols-4 gap-3">
+                      {[
+                        { val: 0, label: "非常好" },
+                        { val: 1, label: "较好" },
+                        { val: 2, label: "较差" },
+                        { val: 3, label: "非常差" },
+                      ].map((item) => (
+                        <button
+                          key={item.val}
+                          type="button"
+                          onClick={() => handleUpdatePsqi({ selfQuality: item.val })}
+                          className={`p-3 rounded-xl border text-sm font-bold transition ${
+                            psqiState.selfQuality === item.val
+                              ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                              : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         ) : (
           /* 情况 C：受试者可见的「我的健康档案与检查结果」 */
           <div className="space-y-6">
-            {/* 综合状态概览卡 */}
             <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
                 <div className="flex items-center gap-3">
@@ -550,7 +928,7 @@ export const PatientPortalPage: React.FC<PatientPortalPageProps> = ({
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-slate-900">
-                      {record.demographics?.name} 的认知健康报告
+                      {record.demographics?.name} 的认知健康全套自评档案
                     </h2>
                     <p className="text-xs text-slate-500">
                       研究编号: {record.subjectNo || record.id} · 宣武医院认知中心健康档案
@@ -561,70 +939,181 @@ export const PatientPortalPage: React.FC<PatientPortalPageProps> = ({
                 <div className="flex items-center gap-2">
                   <span
                     className={`px-3.5 py-1 rounded-full text-xs font-bold ${
-                      isScdPositive
+                      scdScore === null
+                        ? "bg-slate-100 text-slate-600 border border-slate-200"
+                        : isScdPositive
                         ? "bg-amber-100 text-amber-900 border border-amber-200"
                         : "bg-emerald-100 text-emerald-900 border border-emerald-200"
                     }`}
                   >
-                    {isScdPositive ? "主观记忆下降 (SCD)" : "正常认知老化"}
+                    {scdScore === null
+                      ? "待开展记忆自评"
+                      : isScdPositive
+                      ? "主观记忆下降 (SCD)"
+                      : "正常认知老化"}
                   </span>
                 </div>
               </div>
 
-              {/* 核心指标看板 - 仅展示本人档案、SCD自评进度与随访建议，不展示医生专业量表 */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="p-4 rounded-2xl bg-teal-50/70 border border-teal-200">
-                  <div className="text-xs font-bold text-teal-800">SCD-Q9 主观自评状态</div>
-                  <div className="text-2xl font-bold text-teal-900 mt-2">
-                    {scdStatus === "completed" ? (
-                      <span>{scdScore !== null ? `${scdScore} 分` : "--"}</span>
-                    ) : scdStatus === "skipped" ? (
-                      <span className="text-base text-amber-700">已明确跳过</span>
-                    ) : (
-                      <span className="text-base text-slate-500">待完成自评</span>
-                    )}
+              {/* 四维自评与随访综合看板 */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
+                <div className="p-4 rounded-2xl bg-teal-50/70 border border-teal-200 flex flex-col justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-teal-800 flex items-center justify-between">
+                      <span>1. 记忆自评 (SCD)</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-white text-teal-700">主观主诉</span>
+                    </div>
+                    <div className="text-2xl font-bold text-teal-900 mt-2">
+                      {scdScore !== null ? `${scdScore} 分` : (
+                        <span className="text-sm text-slate-500 font-normal">待完成</span>
+                      )}
+                    </div>
                   </div>
                   <p className="text-xs text-teal-700 mt-1">
-                    {scdStatus === "completed"
-                      ? (isScdPositive ? "自评提示存在主观记忆改变感受" : "自评在正常认知波动范围内")
-                      : scdStatus === "skipped"
-                      ? "自评已跳过，分数值保持为空"
-                      : "建议您完成全部记忆自评题目"}
+                    {scdScore !== null
+                      ? (isScdPositive ? "主诉阳性 (≥5分)" : "正常认知波动")
+                      : "建议完成记忆题目"}
                   </p>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
-                  <div className="text-xs font-bold text-slate-600">受试者基本信息摘要</div>
-                  <div className="text-sm font-bold text-slate-900 mt-2 space-y-1">
-                    <div>性别：{record.demographics?.gender === 1 ? "男" : "女"} · 年龄：{record.demographics?.age || "--"} 岁</div>
-                    <div className="text-xs text-slate-500 font-normal">受教育：{record.demographics?.educationYears ?? "--"} 年</div>
+                <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 flex flex-col justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-amber-800 flex items-center justify-between">
+                      <span>2. 情绪自评 (GDS)</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-white text-amber-700">心理状态</span>
+                    </div>
+                    <div className="text-2xl font-bold text-amber-900 mt-2">
+                      {gdsAnsweredCount > 0 ? `${gdsScoreResult.score} 分` : (
+                        <span className="text-sm text-slate-500 font-normal">待完成</span>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-400 mt-1">
-                    档案建档编号：{record.subjectNo || record.id}
+                  <p className="text-xs text-amber-700 mt-1">
+                    {gdsAnsweredCount > 0 ? gdsScoreResult.grade : "自评近1周情绪"}
                   </p>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
-                  <div className="text-xs font-bold text-slate-600">临床随访建议状态</div>
-                  <div className="text-base font-bold text-slate-900 mt-2">
-                    {record.diagnosis?.notes ? "医生已提供随访建议" : "等待主治医生综合评估"}
+                <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200 flex flex-col justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-indigo-800 flex items-center justify-between">
+                      <span>3. 睡眠自评 (PSQI)</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-white text-indigo-700">生活作息</span>
+                    </div>
+                    <div className="text-2xl font-bold text-indigo-900 mt-2">
+                      {hasPsqiAnswered ? `${psqiScoreResult.score} 分` : (
+                        <span className="text-sm text-slate-500 font-normal">待完成</span>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {record.diagnosis?.notes ? "请参考下方医生随访与生活指导" : "医生完成综合测评后将更新此项"}
+                  <p className="text-xs text-indigo-700 mt-1">
+                    {hasPsqiAnswered ? psqiScoreResult.qualityText : "自评近1个月睡眠与作息"}
                   </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-slate-600">4. 医生随访指导</div>
+                    <div className="text-sm font-bold text-slate-900 mt-2">
+                      {hasDoctorNotes ? "已出具随访医嘱" : "等待医生评估"}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {hasDoctorNotes ? "医生已签字指导" : "测评后将自动同步"}
+                    </p>
+                  </div>
+                  {hasDoctorNotes && (
+                    <button
+                      type="button"
+                      onClick={() => setIsFollowUpModalOpen(true)}
+                      className="mt-3 px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>查看医生随访详情</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* 医生随访与生活指导意见（仅展示已录入的生活随访内容） */}
+              {/* 医生随访与生活指导意见 */}
               <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
-                  <Stethoscope className="w-4 h-4 text-teal-600" />
-                  <span>健康指导与随访安排：</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                    <Stethoscope className="w-4 h-4 text-teal-600" />
+                    <span>主治医生随访指导意见：</span>
+                  </div>
+                  {hasDoctorNotes && (
+                    <button
+                      type="button"
+                      onClick={() => setIsFollowUpModalOpen(true)}
+                      className="text-teal-700 hover:text-teal-900 text-xs font-semibold underline cursor-pointer"
+                    >
+                      查看完整医嘱
+                    </button>
+                  )}
                 </div>
-                <p className="text-sm text-slate-700 leading-relaxed">
-                  {doctorNotes}
-                </p>
+                {hasDoctorNotes ? (
+                  <p className="text-sm text-slate-700 leading-relaxed bg-white p-3.5 rounded-xl border border-slate-200 whitespace-pre-wrap">
+                    {doctorNotes}
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-400 italic bg-white/60 p-3 rounded-xl border border-slate-200/60">
+                    暂无医生针对性随访医嘱。受试者完成自评后，请由主治医师开展专业神经心理测评并签署。
+                  </p>
+                )}
               </div>
+
+              {/* Follow-up Notes Modal */}
+              {isFollowUpModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-fade-in">
+                  <div className="bg-white max-w-lg w-full rounded-2xl shadow-xl border border-slate-200 p-6 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <div className="flex items-center gap-2">
+                        <Stethoscope className="w-5 h-5 text-teal-600" />
+                        <h3 className="font-bold text-base text-slate-900">
+                          主治医生临床随访指导意见
+                        </h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsFollowUpModalOpen(false)}
+                        className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="space-y-3 text-xs text-slate-700 max-h-[60vh] overflow-y-auto">
+                      <div className="p-3 bg-teal-50/60 rounded-xl border border-teal-100">
+                        <span className="font-bold text-teal-800">受试者：</span>
+                        <span>{record.demographics?.name} ({record.demographics?.gender === 1 ? "男" : "女"}, {record.demographics?.age}岁)</span>
+                        <span className="ml-3 font-bold text-teal-800">建档编号：</span>
+                        <span>{record.subjectNo || record.id}</span>
+                      </div>
+
+                      <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                        <div className="font-bold text-slate-800">随访医嘱及生活指导正文：</div>
+                        <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">
+                          {doctorNotes}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+                        <span>签署医生：{record.followUp?.evaluatorSignature || record.evaluator || "主治医师"}</span>
+                        <span>下一次随访预约：{record.followUp?.nextVisitDate || "1年后复查"}</span>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setIsFollowUpModalOpen(false)}
+                        className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs"
+                      >
+                        已阅关闭
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* 宣武医院脑健康科普与生活建议 */}
               <div className="space-y-3">
