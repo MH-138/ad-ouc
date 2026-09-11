@@ -11,23 +11,24 @@ interface Props {
 }
 
 export const SectionMemoryBattery: React.FC<Props> = ({ record, onChange, onOpenTimerCenter }) => {
-  const eduYears = record.demographics.educationYears || 0;
-  const age = record.demographics.age || 65;
+  const eduYears = record.demographics?.educationYears || 0;
+  const age = record.demographics?.age || 65;
 
-  const avltResult = calculateAVLTH(record.scales.avltH, age, eduYears);
-  const lmResult = calculateLogicalMemory(record.scales.logicalMemory, eduYears);
+  const avltResult = calculateAVLTH(record.scales?.avltH || ({} as any), age, eduYears);
+  const lmResult = calculateLogicalMemory(record.scales?.logicalMemory || ({} as any), eduYears);
 
   const toggleWordInList = (
     trial: "n1Words" | "n2Words" | "n3Words" | "n4Delayed5MinWords" | "n5Delayed20MinWords",
     word: string
   ) => {
-    const list = record.scales.avltH[trial] || [];
+    const currentAvlt = record.scales?.avltH || ({} as any);
+    const list = currentAvlt[trial] || [];
     const nextList = list.includes(word) ? list.filter((w) => w !== word) : [...list, word];
     onChange({
       scales: {
         ...record.scales,
         avltH: {
-          ...record.scales.avltH,
+          ...currentAvlt,
           [trial]: nextList,
         },
       },
@@ -35,11 +36,12 @@ export const SectionMemoryBattery: React.FC<Props> = ({ record, onChange, onOpen
   };
 
   const updateLogicalMemory = (patch: Partial<SubjectRecord["scales"]["logicalMemory"]>) => {
+    const currentLm = record.scales?.logicalMemory || ({} as any);
     onChange({
       scales: {
         ...record.scales,
         logicalMemory: {
-          ...record.scales.logicalMemory,
+          ...currentLm,
           ...patch,
         },
       },

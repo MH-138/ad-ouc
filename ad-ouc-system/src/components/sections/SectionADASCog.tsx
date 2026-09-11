@@ -10,14 +10,15 @@ interface Props {
 }
 
 export const SectionADASCog: React.FC<Props> = ({ record, onChange }) => {
-  const adasResult = calculateADASCog(record.scales.adasCog);
+  const adasResult = calculateADASCog(record.scales?.adasCog || ({} as any));
 
   const updateAdas = (patch: Partial<SubjectRecord["scales"]["adasCog"]>) => {
+    const current = record.scales?.adasCog || ({} as any);
     onChange({
       scales: {
         ...record.scales,
         adasCog: {
-          ...record.scales.adasCog,
+          ...current,
           ...patch,
         },
       },

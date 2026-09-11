@@ -10,42 +10,45 @@ interface Props {
 }
 
 export const SectionMoodBehavior: React.FC<Props> = ({ record, onChange }) => {
-  const hamdResult = calculateHAMD17(record.scales.hamd17.items);
-  const hamaResult = calculateHAMA(record.scales.hama.items);
-  const gdsResult = calculateGDS15(record.scales.gds15.answers);
-  const npiResult = calculateNPI(record.scales.npi.items);
+  const hamdResult = calculateHAMD17(record.scales?.hamd17?.items || {});
+  const hamaResult = calculateHAMA(record.scales?.hama?.items || {});
+  const gdsResult = calculateGDS15(record.scales?.gds15?.answers || {});
+  const npiResult = calculateNPI(record.scales?.npi?.items || {});
 
   const updateHamdItem = (itemNo: number, val: number) => {
+    const current = record.scales?.hamd17 || { items: {} };
     onChange({
       scales: {
         ...record.scales,
         hamd17: {
-          ...record.scales.hamd17,
-          items: { ...record.scales.hamd17.items, [itemNo]: val },
+          ...current,
+          items: { ...(current.items || {}), [itemNo]: val },
         },
       },
     });
   };
 
   const updateHamaItem = (itemNo: number, val: number) => {
+    const current = record.scales?.hama || { items: {} };
     onChange({
       scales: {
         ...record.scales,
         hama: {
-          ...record.scales.hama,
-          items: { ...record.scales.hama.items, [itemNo]: val },
+          ...current,
+          items: { ...(current.items || {}), [itemNo]: val },
         },
       },
     });
   };
 
   const updateGdsItem = (itemNo: number, val: boolean) => {
+    const current = record.scales?.gds15 || { answers: {} };
     onChange({
       scales: {
         ...record.scales,
         gds15: {
-          ...record.scales.gds15,
-          answers: { ...record.scales.gds15.answers, [itemNo]: val },
+          ...current,
+          answers: { ...(current.answers || {}), [itemNo]: val },
         },
       },
     });
@@ -55,19 +58,21 @@ export const SectionMoodBehavior: React.FC<Props> = ({ record, onChange }) => {
     domainNo: number,
     patch: Partial<{ has: boolean; frequency: number; severity: number; distress: number }>
   ) => {
-    const current = record.scales.npi.items?.[domainNo] || {
+    const npiItems = record.scales?.npi?.items || {};
+    const current = npiItems[domainNo] || {
       has: false,
       frequency: 1,
       severity: 1,
       distress: 0,
     };
+    const currentNpi = record.scales?.npi || { items: {} };
     onChange({
       scales: {
         ...record.scales,
         npi: {
-          ...record.scales.npi,
+          ...currentNpi,
           items: {
-            ...record.scales.npi.items,
+            ...(currentNpi.items || {}),
             [domainNo]: { ...current, ...patch },
           },
         },
@@ -132,7 +137,7 @@ export const SectionMoodBehavior: React.FC<Props> = ({ record, onChange }) => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
           {GDS15_ITEMS.map((item) => {
-            const currentVal = record.scales.gds15.answers?.[item.id];
+            const currentVal = record.scales?.gds15?.answers?.[item.id];
             const isScorePoint = (item.reverse && currentVal === false) || (!item.reverse && currentVal === true);
 
             return (
@@ -200,7 +205,7 @@ export const SectionMoodBehavior: React.FC<Props> = ({ record, onChange }) => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           {NPI_DOMAINS.map((domain) => {
-            const current = record.scales.npi.items?.[domain.no] || {
+            const current = record.scales?.npi?.items?.[domain.no] || {
               has: false,
               frequency: 1,
               severity: 1,

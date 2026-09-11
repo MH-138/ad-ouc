@@ -134,7 +134,7 @@ const SCALE_CATEGORIES: ScaleCategory[] = [
         name: "Global CDR 华盛顿大学分级",
         icon: Award,
         badge: (r) => {
-          const cdrRes = calculateGlobalCDR(r.scales.cdr);
+          const cdrRes = calculateGlobalCDR(r.scales?.cdr);
           return `CDR ${cdrRes.globalCDR}分`;
         },
       },

@@ -15,41 +15,44 @@ interface Props {
 }
 
 export const SectionComprehensiveScreening: React.FC<Props> = ({ record, onChange }) => {
-  const eduYears = record.demographics.educationYears || 0;
-  const mmseResult = calculateMMSE(record.scales.mmse.items, eduYears);
-  const mocaResult = calculateMoCAB(record.scales.mocaB, eduYears);
-  const handednessResult = calculateHandedness(record.scales.handedness.tasks);
+  const eduYears = record.demographics?.educationYears || 0;
+  const mmseResult = calculateMMSE(record.scales?.mmse?.items || {}, eduYears);
+  const mocaResult = calculateMoCAB(record.scales?.mocaB || {}, eduYears);
+  const handednessResult = calculateHandedness(record.scales?.handedness?.tasks || {});
 
   const updateMMSEItem = (key: string, val: number) => {
+    const current = record.scales?.mmse || { items: {} };
     onChange({
       scales: {
         ...record.scales,
         mmse: {
-          ...record.scales.mmse,
-          items: { ...record.scales.mmse.items, [key]: val },
+          ...current,
+          items: { ...(current.items || {}), [key]: val },
         },
       },
     });
   };
 
   const updateMoCABField = (field: keyof SubjectRecord["scales"]["mocaB"], val: number) => {
+    const current = record.scales?.mocaB || {};
     onChange({
       scales: {
         ...record.scales,
-        mocaB: { ...record.scales.mocaB, [field]: val },
+        mocaB: { ...current, [field]: val },
       },
     });
   };
 
   const updateHandednessItem = (taskKey: string, side: "left" | "right", val: 0 | 1 | 2) => {
-    const current = record.scales.handedness.tasks?.[taskKey] || { left: 0, right: 2 };
+    const handedness = record.scales?.handedness || { tasks: {} };
+    const current = handedness.tasks?.[taskKey] || { left: 0, right: 2 };
     onChange({
       scales: {
         ...record.scales,
         handedness: {
-          ...record.scales.handedness,
+          ...handedness,
           tasks: {
-            ...record.scales.handedness.tasks,
+            ...(handedness.tasks || {}),
             [taskKey]: { ...current, [side]: val },
           },
         },

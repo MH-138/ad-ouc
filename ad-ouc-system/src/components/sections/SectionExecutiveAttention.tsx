@@ -9,11 +9,11 @@ interface Props {
 }
 
 export const SectionExecutiveAttention: React.FC<Props> = ({ record, onChange }) => {
-  const eduYears = record.demographics.educationYears || 0;
-  const age = record.demographics.age || 65;
+  const eduYears = record.demographics?.educationYears || 0;
+  const age = record.demographics?.age || 65;
 
-  const sttResult = calculateSTT(record.scales.stt, eduYears, age);
-  const mesResult = calculateMES(record.scales.mes, eduYears);
+  const sttResult = calculateSTT(record.scales?.stt || ({} as any), eduYears, age);
+  const mesResult = calculateMES(record.scales?.mes || ({} as any), eduYears);
 
   // Interactive Stopwatch for STT-A / STT-B
   const [stopwatchTarget, setStopwatchTarget] = useState<"sttATestSeconds" | "sttBTestSeconds" | null>(null);
@@ -32,11 +32,12 @@ export const SectionExecutiveAttention: React.FC<Props> = ({ record, onChange })
 
   const handleStopwatchSave = () => {
     if (stopwatchTarget) {
+      const currentStt = record.scales?.stt || ({} as any);
       onChange({
         scales: {
           ...record.scales,
           stt: {
-            ...record.scales.stt,
+            ...currentStt,
             [stopwatchTarget]: stopwatchSec,
           },
         },
@@ -46,19 +47,21 @@ export const SectionExecutiveAttention: React.FC<Props> = ({ record, onChange })
   };
 
   const updateSTT = (patch: Partial<SubjectRecord["scales"]["stt"]>) => {
+    const currentStt = record.scales?.stt || ({} as any);
     onChange({
       scales: {
         ...record.scales,
-        stt: { ...record.scales.stt, ...patch },
+        stt: { ...currentStt, ...patch },
       },
     });
   };
 
   const updateMES = (patch: Partial<SubjectRecord["scales"]["mes"]>) => {
+    const currentMes = record.scales?.mes || ({} as any);
     onChange({
       scales: {
         ...record.scales,
-        mes: { ...record.scales.mes, ...patch },
+        mes: { ...currentMes, ...patch },
       },
     });
   };

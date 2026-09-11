@@ -9,8 +9,9 @@ interface Props {
 
 export const SectionBiomarkersDiagnosis: React.FC<Props> = ({ record, onChange }) => {
   const updateBiomarkers = (patch: Partial<SubjectRecord["biomarkers"]>) => {
+    const current = record.biomarkers || ({} as any);
     onChange({
-      biomarkers: { ...record.biomarkers, ...patch },
+      biomarkers: { ...current, ...patch },
     });
   };
 
@@ -21,8 +22,9 @@ export const SectionBiomarkersDiagnosis: React.FC<Props> = ({ record, onChange }
   };
 
   const updateFollowUp = (patch: Partial<SubjectRecord["followUp"]>) => {
+    const current = record.followUp || ({} as any);
     onChange({
-      followUp: { ...record.followUp, ...patch },
+      followUp: { ...current, ...patch },
     });
   };
 
@@ -40,7 +42,7 @@ export const SectionBiomarkersDiagnosis: React.FC<Props> = ({ record, onChange }
         </div>
         <div className="flex items-center space-x-2 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200 font-mono text-xs">
           <span className="text-slate-500">APOE 基因型:</span>
-          <span className="text-teal-700 font-bold">{record.biomarkers.apoe4Genotype.value || "未检测"}</span>
+          <span className="text-teal-700 font-bold">{record.biomarkers?.apoe4Genotype?.value || "未检测"}</span>
         </div>
       </div>
 

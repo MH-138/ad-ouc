@@ -24,10 +24,11 @@ export const SectionSCDSubjective: React.FC<Props> = ({ record, onChange }) => {
   };
 
   const updateVignettes = (patch: Partial<SubjectRecord["scales"]["vignettes"]>) => {
+    const current = record.scales?.vignettes || {};
     onChange({
       scales: {
         ...record.scales,
-        vignettes: { ...record.scales.vignettes, ...patch },
+        vignettes: { ...current, ...patch },
       },
     });
   };
@@ -631,7 +632,7 @@ export const SectionSCDSubjective: React.FC<Props> = ({ record, onChange }) => {
                 <strong>1. 张亮：</strong>在过去一个月内看电视、打牌都能集中注意力。但每周都有一次会忘记把钥匙或眼镜放在哪里，每次能在5分钟内找到。您认为张亮在集中注意或记东西方面有无困难？
               </p>
               <select
-                value={record.scales.vignettes.cognitive1ZhangLiang}
+                value={record.scales?.vignettes?.cognitive1ZhangLiang || 1}
                 onChange={(e) => updateVignettes({ cognitive1ZhangLiang: Number(e.target.value) })}
                 className="w-full p-2 border border-slate-300 rounded bg-white font-medium text-slate-800"
               >
@@ -649,7 +650,7 @@ export const SectionSCDSubjective: React.FC<Props> = ({ record, onChange }) => {
                 <strong>2. 刘军：</strong>喜欢照着菜谱做新菜，但做菜时经常做错，要回去读好几遍才能学会。您认为刘军在集中注意或记东西方面有无困难？
               </p>
               <select
-                value={record.scales.vignettes.cognitive3LiuJun}
+                value={record.scales?.vignettes?.cognitive3LiuJun || 1}
                 onChange={(e) => updateVignettes({ cognitive3LiuJun: Number(e.target.value) })}
                 className="w-full p-2 border border-slate-300 rounded bg-white font-medium text-slate-800"
               >
@@ -667,7 +668,7 @@ export const SectionSCDSubjective: React.FC<Props> = ({ record, onChange }) => {
                 <strong>3. 李伟：</strong>集中注意力不超过15分钟，别人说话很难专心听。做事常做不完或忘记要做什么，但认识新人能记住名字。您认为李伟有无困难？
               </p>
               <select
-                value={record.scales.vignettes.cognitive4LiWei}
+                value={record.scales?.vignettes?.cognitive4LiWei || 1}
                 onChange={(e) => updateVignettes({ cognitive4LiWei: Number(e.target.value) })}
                 className="w-full p-2 border border-slate-300 rounded bg-white font-medium text-slate-800"
               >
@@ -693,7 +694,7 @@ export const SectionSCDSubjective: React.FC<Props> = ({ record, onChange }) => {
                 <strong>1. 唐静：</strong>喜欢工作与朋友，生活基本满意。但每隔三周会有一两天郁闷并对爱好丧失兴趣，不影响日常活动。您认为她有无悲伤消沉？
               </p>
               <select
-                value={record.scales.vignettes.mood1TangJing}
+                value={record.scales?.vignettes?.mood1TangJing || 1}
                 onChange={(e) => updateVignettes({ mood1TangJing: Number(e.target.value) })}
                 className="w-full p-2 border border-slate-300 rounded bg-white font-medium text-slate-800"
               >
@@ -711,7 +712,7 @@ export const SectionSCDSubjective: React.FC<Props> = ({ record, onChange }) => {
                 <strong>2. 李峰：</strong>感到紧张焦虑对未来悲观。与别人在一起或做感兴趣的事时心情好些，一个人呆着感到无价值和空虚。您认为他有无抑郁？
               </p>
               <select
-                value={record.scales.vignettes.mood2LiFeng}
+                value={record.scales?.vignettes?.mood2LiFeng || 1}
                 onChange={(e) => updateVignettes({ mood2LiFeng: Number(e.target.value) })}
                 className="w-full p-2 border border-slate-300 rounded bg-white font-medium text-slate-800"
               >
@@ -729,7 +730,7 @@ export const SectionSCDSubjective: React.FC<Props> = ({ record, onChange }) => {
                 <strong>3. 郑波：</strong>大多数时候感到抑郁，经常哭且对未来无希望，觉得自己是负担，认为死是最好的选择。您认为他有无严重抑郁？
               </p>
               <select
-                value={record.scales.vignettes.mood3ZhengBo}
+                value={record.scales?.vignettes?.mood3ZhengBo || 1}
                 onChange={(e) => updateVignettes({ mood3ZhengBo: Number(e.target.value) })}
                 className="w-full p-2 border border-slate-300 rounded bg-white font-medium text-slate-800"
               >

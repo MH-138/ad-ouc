@@ -11,11 +11,11 @@ interface Props {
 }
 
 export const SectionLanguageNaming: React.FC<Props> = ({ record, onChange, onOpenTimerCenter }) => {
-  const eduYears = record.demographics.educationYears || 0;
-  const age = record.demographics.age || 65;
+  const eduYears = record.demographics?.educationYears || 0;
+  const age = record.demographics?.age || 65;
 
-  const bntResult = calculateBNT(record.scales.bnt.items, eduYears, age);
-  const vftResult = calculateVFT(record.scales.vft, eduYears, age);
+  const bntResult = calculateBNT(record.scales?.bnt?.items || {}, eduYears, age);
+  const vftResult = calculateVFT(record.scales?.vft || ({} as any), eduYears, age);
 
   const [activeBntItemIndex, setActiveBntItemIndex] = useState(0);
 
@@ -23,14 +23,16 @@ export const SectionLanguageNaming: React.FC<Props> = ({ record, onChange, onOpe
     itemNo: number,
     state: { spontaneous?: boolean; semanticCueCorrect?: boolean; phonemicCueCorrect?: boolean; recognitionChoice?: number }
   ) => {
-    const current = record.scales.bnt.items?.[itemNo] || {};
+    const bntItems = record.scales?.bnt?.items || {};
+    const current = bntItems[itemNo] || {};
+    const currentBnt = record.scales?.bnt || { items: {} };
     onChange({
       scales: {
         ...record.scales,
         bnt: {
-          ...record.scales.bnt,
+          ...currentBnt,
           items: {
-            ...record.scales.bnt.items,
+            ...(currentBnt.items || {}),
             [itemNo]: { ...current, ...state },
           },
         },
@@ -39,11 +41,12 @@ export const SectionLanguageNaming: React.FC<Props> = ({ record, onChange, onOpe
   };
 
   const updateVft = (patch: Partial<SubjectRecord["scales"]["vft"]>) => {
+    const currentVft = record.scales?.vft || ({} as any);
     onChange({
       scales: {
         ...record.scales,
         vft: {
-          ...record.scales.vft,
+          ...currentVft,
           ...patch,
         },
       },
@@ -51,7 +54,7 @@ export const SectionLanguageNaming: React.FC<Props> = ({ record, onChange, onOpe
   };
 
   const currentBntItem = BNT_ITEMS_30[activeBntItemIndex];
-  const currentBntScore = record.scales.bnt.items?.[currentBntItem.no];
+  const currentBntScore = record.scales?.bnt?.items?.[currentBntItem.no];
 
   return (
     <div className="space-y-6 animate-fade-in">

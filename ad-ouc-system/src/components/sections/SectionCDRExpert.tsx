@@ -9,14 +9,15 @@ interface Props {
 }
 
 export const SectionCDRExpert: React.FC<Props> = ({ record, onChange }) => {
-  const cdrResult = calculateGlobalCDR(record.scales.cdr);
+  const cdrResult = calculateGlobalCDR(record.scales?.cdr || ({} as any));
 
   const updateCDRDomain = (domain: keyof SubjectRecord["scales"]["cdr"], val: number) => {
+    const current = record.scales?.cdr || ({} as any);
     onChange({
       scales: {
         ...record.scales,
         cdr: {
-          ...record.scales.cdr,
+          ...current,
           [domain]: val,
         },
       },

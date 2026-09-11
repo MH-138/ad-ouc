@@ -16,76 +16,82 @@ interface Props {
 }
 
 export const SectionDailyLivingSleep: React.FC<Props> = ({ record, onChange }) => {
-  const faqResult = calculateFAQ(record.scales.faq.items);
-  const ecogResult = calculateEcog(record.scales.ecog.items);
-  const psqiResult = calculatePSQI(record.scales.psqi);
-  const rbdsqResult = calculateRBDSQ(record.scales.rbdsq.items);
-  const essResult = calculateESS(record.scales.ess.items);
+  const faqResult = calculateFAQ(record.scales?.faq?.items || {});
+  const ecogResult = calculateEcog(record.scales?.ecog?.items || {});
+  const psqiResult = calculatePSQI(record.scales?.psqi || ({} as any));
+  const rbdsqResult = calculateRBDSQ(record.scales?.rbdsq?.items || {});
+  const essResult = calculateESS(record.scales?.ess?.items || {});
 
   const updateFaqItem = (itemNo: number, val: number) => {
+    const current = record.scales?.faq || { informantPresent: false, items: {} };
     onChange({
       scales: {
         ...record.scales,
         faq: {
-          ...record.scales.faq,
-          items: { ...record.scales.faq.items, [itemNo]: val },
+          ...current,
+          items: { ...(current.items || {}), [itemNo]: val },
         },
       },
     });
   };
 
   const updateEcogItem = (itemNo: number, val: number) => {
+    const current = record.scales?.ecog || { items: {} };
     onChange({
       scales: {
         ...record.scales,
         ecog: {
-          ...record.scales.ecog,
-          items: { ...record.scales.ecog.items, [itemNo]: val },
+          ...current,
+          items: { ...(current.items || {}), [itemNo]: val },
         },
       },
     });
   };
 
   const updatePsqi = (patch: Partial<SubjectRecord["scales"]["psqi"]>) => {
+    const current = record.scales?.psqi || ({} as any);
     onChange({
       scales: {
         ...record.scales,
-        psqi: { ...record.scales.psqi, ...patch },
+        psqi: { ...current, ...patch },
       },
     });
   };
 
   const updatePsqiTrouble = (key: string, val: number) => {
+    const currentPsqi = record.scales?.psqi || ({} as any);
     onChange({
       scales: {
         ...record.scales,
         psqi: {
-          ...record.scales.psqi,
-          troubles: { ...record.scales.psqi.troubles, [key]: val },
+          ...currentPsqi,
+          troubles: { ...(currentPsqi.troubles || {}), [key]: val },
         },
       },
     });
   };
 
   const updateRbdsqItem = (key: string, val: boolean) => {
+    const current = record.scales?.rbdsq || { items: {} };
     onChange({
       scales: {
         ...record.scales,
         rbdsq: {
-          ...record.scales.rbdsq,
-          items: { ...record.scales.rbdsq.items, [key]: val },
+          ...current,
+          items: { ...(current.items || {}), [key]: val },
         },
       },
     });
   };
 
   const updateEssItem = (itemNo: number, val: number) => {
+    const current = record.scales?.ess || { items: {} };
     onChange({
       scales: {
         ...record.scales,
         ess: {
-          ...record.scales.ess,
-          items: { ...record.scales.ess.items, [itemNo]: val },
+          ...current,
+          items: { ...(current.items || {}), [itemNo]: val },
         },
       },
     });
