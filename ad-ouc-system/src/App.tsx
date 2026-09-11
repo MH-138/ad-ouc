@@ -6,7 +6,7 @@ import {
   PENDING_REVIEW_PRESET,
   BLANK_PATIENT_1_PRESET,
   BLANK_PATIENT_2_PRESET,
-  createDefaultPatient,
+  hydrateSubjectRecord,
 } from "./utils/initialPatient";
 import { AppPageId } from "./types/navigation";
 import { RoleType } from "./utils/chatDecisionTree";
@@ -68,18 +68,7 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((item: any) => {
-            const def = createDefaultPatient(item.demographics?.name || item.name || "受试者");
-            return {
-              ...def,
-              ...item,
-              diagnosis: item.diagnosis || def.diagnosis,
-              demographics: {
-                ...def.demographics,
-                ...(item.demographics || {}),
-              },
-            };
-          });
+          return parsed.map(hydrateSubjectRecord);
         }
       } catch (e) {}
     }
@@ -132,35 +121,32 @@ export default function App() {
         if (Array.isArray(remotePatients) && remotePatients.length > 0) {
           const mappedCohort: SubjectRecord[] = remotePatients.map((p: any) => {
             const full = p.fullRecord || {};
-            const def = createDefaultPatient(p.name || full.demographics?.name || "受试者");
-            return {
-              ...def,
+            return hydrateSubjectRecord({
               ...full,
               ...p,
               id: p.id,
-              subjectNo: p.research_no || p.researchNo || p.subjectNo || full.subjectNo || "S26-4921",
-              protocolNo: p.protocol_no || p.protocolNo || full.protocolNo || "XW-SCD-2026",
-              centerNo: p.center_no || p.centerNo || full.centerNo || "01",
-              visitCode: p.visit_code || p.visitCode || full.visitCode || "W000",
-              evaluator: p.evaluator || full.evaluator || "韩璎教授团队",
+              subjectNo: p.research_no ?? p.researchNo ?? p.subjectNo ?? full.subjectNo ?? "",
+              protocolNo: p.protocol_no ?? p.protocolNo ?? full.protocolNo,
+              centerNo: p.center_no ?? p.centerNo ?? full.centerNo,
+              visitCode: p.visit_code ?? p.visitCode ?? full.visitCode,
+              evaluator: p.evaluator ?? full.evaluator,
               demographics: {
-                ...def.demographics,
                 ...(full.demographics || {}),
-                name: p.name || full.demographics?.name || "受试者",
-                gender: (p.gender === 1 || p.gender === 2 ? p.gender : full.demographics?.gender || 1) as 1 | 2,
-                age: p.age || full.demographics?.age || 71,
-                educationYears: p.education_years || p.educationYears || full.demographics?.educationYears || 9,
-                height: p.height_cm || p.height || full.demographics?.height || 165,
-                weight: p.weight_kg || p.weight || full.demographics?.weight || 65,
-                phone1: p.phone || full.demographics?.phone1 || "",
-                marriageStatus: p.marriage_status || full.demographics?.marriageStatus || 1,
-                livingStatus: p.living_status || full.demographics?.livingStatus || 1,
+                name: p.name ?? full.demographics?.name,
+                gender: p.gender === 1 || p.gender === 2 ? p.gender : full.demographics?.gender,
+                age: p.age ?? full.demographics?.age,
+                educationYears: p.education_years ?? p.educationYears ?? full.demographics?.educationYears,
+                height: p.height_cm ?? p.height ?? full.demographics?.height,
+                weight: p.weight_kg ?? p.weight ?? full.demographics?.weight,
+                phone1: p.phone ?? full.demographics?.phone1,
+                marriageStatus: p.marriage_status ?? full.demographics?.marriageStatus,
+                livingStatus: p.living_status ?? full.demographics?.livingStatus,
               },
-              scales: full.scales || p.scales || def.scales,
-              diagnosis: full.diagnosis || p.diagnosis || def.diagnosis,
-              followUp: full.followUp || p.followUp || def.followUp,
-              biomarkers: full.biomarkers || p.biomarkers || def.biomarkers,
-            };
+              scales: full.scales ?? p.scales,
+              diagnosis: full.diagnosis ?? p.diagnosis,
+              followUp: full.followUp ?? p.followUp,
+              biomarkers: full.biomarkers ?? p.biomarkers,
+            });
           });
           setCohort(mappedCohort);
         } else {
@@ -193,25 +179,26 @@ export default function App() {
 
   // Record CRUD Handlers with Turso persistence
   const handleUpdateRecord = async (updated: SubjectRecord) => {
+    const hydrated = hydrateSubjectRecord(updated);
     setCohort((prev) =>
       prev.map((p) =>
-        p.id === updated.id
-          ? { ...updated, updatedAt: new Date().toISOString() }
+        p.id === hydrated.id
+          ? { ...hydrated, updatedAt: new Date().toISOString() }
           : p
       )
     );
     try {
       await tursoApi.savePatient({
-        id: updated.id,
-        researchNo: updated.subjectNo,
-        name: updated.demographics?.name,
-        gender: updated.demographics?.gender,
-        age: updated.demographics?.age,
-        educationYears: updated.demographics?.educationYears,
-        heightCm: updated.demographics?.height,
-        weightKg: updated.demographics?.weight,
-        phone: updated.demographics?.phone1,
-        ...updated,
+        id: hydrated.id,
+        researchNo: hydrated.subjectNo,
+        name: hydrated.demographics?.name,
+        gender: hydrated.demographics?.gender,
+        age: hydrated.demographics?.age,
+        educationYears: hydrated.demographics?.educationYears,
+        heightCm: hydrated.demographics?.height,
+        weightKg: hydrated.demographics?.weight,
+        phone: hydrated.demographics?.phone1,
+        ...hydrated,
       });
     } catch (e) {
       console.warn("Turso update failed:", e);
@@ -223,8 +210,9 @@ export default function App() {
   };
 
   const handleCreatePatient = (newRecord: SubjectRecord) => {
-    setCohort((prev) => [newRecord, ...prev]);
-    setActivePatientId(newRecord.id);
+    const hydrated = hydrateSubjectRecord(newRecord);
+    setCohort((prev) => [hydrated, ...prev]);
+    setActivePatientId(hydrated.id);
     if (pendingPortalAfterPatientSelect) {
       setCurrentPortal(pendingPortalAfterPatientSelect);
       setPendingPortalAfterPatientSelect(null);

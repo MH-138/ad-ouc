@@ -60,22 +60,33 @@ export const SectionComprehensiveReport: React.FC<Props> = ({
         record.scales.mocaB.orientation !== undefined)
   );
   const hasAvltStarted = Boolean(
-    record.scales.avltH?.n1Words && record.scales.avltH.n1Words.length > 0
+    record.scales.avltH &&
+      [
+        record.scales.avltH.n1Words,
+        record.scales.avltH.n2Words,
+        record.scales.avltH.n3Words,
+        record.scales.avltH.n4Delayed5MinWords,
+        record.scales.avltH.n5Delayed20MinWords,
+      ].some((words) => words.length > 0)
   );
   const hasLogicalMemoryStarted = Boolean(
-    record.scales.logicalMemory?.delayedStoryUnits !== undefined &&
-      record.scales.logicalMemory.delayedStoryUnits > 0
+    record.scales.logicalMemory &&
+      Object.values(record.scales.logicalMemory).some(
+        (value) => typeof value === "number" && value > 0,
+      )
   );
   const hasSttStarted = Boolean(
     record.scales.stt?.sttBTestSeconds !== undefined &&
       record.scales.stt.sttBTestSeconds > 0
   );
   const hasBntStarted = Boolean(
-    record.scales.bnt?.spontaneousScore !== undefined &&
-      record.scales.bnt.spontaneousScore > 0
+    record.scales.bnt?.items && Object.keys(record.scales.bnt.items).length > 0
   );
   const hasMesStarted = Boolean(
-    record.scales.mes?.score !== undefined && record.scales.mes.score > 0
+    record.scales.mes &&
+      Object.values(record.scales.mes).some(
+        (value) => typeof value === "number" && value > 0,
+      )
   );
   const hasFaqStarted = Boolean(
     record.scales.faq?.items && Object.keys(record.scales.faq.items).length > 0

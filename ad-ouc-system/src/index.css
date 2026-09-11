@@ -1,1 +1,52 @@
 @import "tailwindcss";
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  body.print-report-open {
+    background: #fff !important;
+  }
+
+  body.print-report-open #root {
+    display: none !important;
+  }
+
+  body.print-report-open .print-report-overlay {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  body.print-report-open .print-report-sheet {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  body.print-report-open table {
+    break-inside: auto;
+  }
+
+  body.print-report-open thead {
+    display: table-header-group;
+  }
+
+  body.print-report-open tr,
+  body.print-report-open h1,
+  body.print-report-open h2,
+  body.print-report-open h3 {
+    break-inside: avoid;
+  }
+}

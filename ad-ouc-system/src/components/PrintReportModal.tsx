@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { SubjectRecord } from "../types/assessment";
 import {
   evaluateCompleteAssessment,
@@ -14,19 +15,51 @@ interface Props {
 }
 
 export const PrintReportModal: React.FC<Props> = ({ isOpen, onClose, record }) => {
+  useEffect(() => {
+    document.body.classList.toggle("print-report-open", isOpen);
+
+    return () => {
+      document.body.classList.remove("print-report-open");
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const results = evaluateCompleteAssessment(record);
   const cdr = calculateGlobalCDR(record.scales.cdr);
   const adas = calculateADASCog(record.scales.adasCog);
+  const hasAvlt = [
+    record.scales.avltH.n1Words,
+    record.scales.avltH.n2Words,
+    record.scales.avltH.n3Words,
+    record.scales.avltH.n4Delayed5MinWords,
+    record.scales.avltH.n5Delayed20MinWords,
+  ].some((words) => words.length > 0);
+  const hasLogicalMemory = Object.values(record.scales.logicalMemory).some(
+    (value) => typeof value === "number" && value > 0,
+  );
+  const hasStt = Object.values(record.scales.stt).some(
+    (value) => typeof value === "number" && value > 0,
+  );
+  const hasBnt = Object.keys(record.scales.bnt.items).length > 0;
+  const hasMes = Object.values(record.scales.mes).some(
+    (value) => typeof value === "number" && value > 0,
+  );
+  const hasAdas = Object.keys(record.scales.adasCog).length > 0;
+  const hasCdr = Object.keys(record.scales.cdr).length > 0;
+  const hasFaq = Object.keys(record.scales.faq.items).length > 0;
+  const hasGds = Object.keys(record.scales.gds15.answers).length > 0;
+  const hasPsqi =
+    Object.keys(record.scales.psqi.troubles || {}).length > 0 ||
+    record.scales.psqi.selfQuality !== undefined;
 
   const handlePrint = () => {
     window.print();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fade-in overflow-y-auto">
-      <div className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-6 flex flex-col max-h-[92vh]">
+  return createPortal(
+    <div className="print-report-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fade-in overflow-y-auto">
+      <div className="print-report-sheet bg-white w-full max-w-5xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-6 flex flex-col max-h-[92vh]">
         {/* Action bar (hidden when printed) */}
         <div className="p-3.5 px-6 bg-slate-50 text-slate-800 border-b border-slate-200 flex items-center justify-between print:hidden">
           <div className="flex items-center space-x-2">
@@ -75,7 +108,7 @@ export const PrintReportModal: React.FC<Props> = ({ isOpen, onClose, record }) =
             <div><strong>性别：</strong>{record.demographics.gender === 1 ? "男" : "女"}</div>
             <div><strong>实足年龄：</strong>{record.demographics.age} 岁</div>
             <div><strong>受教育年限：</strong>{record.demographics.educationYears} 年 ({record.demographics.educationLevel || "高中/大专"})</div>
-            <div><strong>利手：</strong>{record.scales.handedness.dominantHand === "right" ? "右手利 (右利手)" : "左手利"}</div>
+            <div><strong>利手：</strong>{record.scales.handedness.result || "未评定"}</div>
             <div><strong>病史提供者：</strong>{record.demographics.informantRelation || "配偶/子女"}</div>
             <div><strong>认知下降首发年龄：</strong>{record.demographics.cognitiveOnsetAge || record.demographics.age} 岁</div>
             <div><strong>APOE 基因型：</strong><span className="font-bold text-teal-800">{record.biomarkers.apoe4Genotype.value || "未检测"}</span></div>
@@ -120,72 +153,72 @@ export const PrintReportModal: React.FC<Props> = ({ isOpen, onClose, record }) =
                 </tr>
                 <tr>
                   <td className="p-2 border-r border-slate-300 font-medium">AVLT-H 20min长延迟回忆 (N5)</td>
-                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{results.avltH.n5Score} / 12 词</td>
+                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{hasAvlt ? `${results.avltH.n5Score} / 12 词` : "未评定"}</td>
                   <td className="p-2 border-r border-slate-300">切点 ≤ {results.avltH.n5Cutoff} 词 ({results.avltH.ageGroup})</td>
-                  <td className="p-2 border-r border-slate-300">{results.avltH.isN5Abnormal ? "❌ 异常" : "✅ 正常"}</td>
+                  <td className="p-2 border-r border-slate-300">{hasAvlt ? (results.avltH.isN5Abnormal ? "异常" : "正常") : "待评定"}</td>
                   <td className="p-2">海马依赖长延迟情景记忆</td>
                 </tr>
                 <tr>
                   <td className="p-2 border-r border-slate-300 font-medium">逻辑记忆 30min延时故事回忆</td>
-                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{results.logicalMemory.delayedStoryUnits} / 25 单元</td>
+                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{hasLogicalMemory ? `${results.logicalMemory.delayedStoryUnits} / 25 单元` : "未评定"}</td>
                   <td className="p-2 border-r border-slate-300">切点 ≤ {results.logicalMemory.delayedCutoff} 单元</td>
-                  <td className="p-2 border-r border-slate-300">{results.logicalMemory.isDelayedAbnormal ? "❌ 异常" : "✅ 正常"}</td>
+                  <td className="p-2 border-r border-slate-300">{hasLogicalMemory ? (results.logicalMemory.isDelayedAbnormal ? "异常" : "正常") : "待评定"}</td>
                   <td className="p-2">语篇故事逻辑记忆</td>
                 </tr>
                 <tr>
                   <td className="p-2 border-r border-slate-300 font-medium">STT-B 形状连线测验耗时</td>
-                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{record.scales.stt.sttBTestSeconds} 秒</td>
+                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{hasStt ? `${record.scales.stt.sttBTestSeconds} 秒` : "未评定"}</td>
                   <td className="p-2 border-r border-slate-300">切点 ≥ {results.stt.bCutoff} 秒 ({results.stt.group})</td>
-                  <td className="p-2 border-r border-slate-300">{results.stt.isBAbnormal ? "❌ 异常" : "✅ 正常"}</td>
+                  <td className="p-2 border-r border-slate-300">{hasStt ? (results.stt.isBAbnormal ? "异常" : "正常") : "待评定"}</td>
                   <td className="p-2">执行功能与注意转换</td>
                 </tr>
                 <tr>
                   <td className="p-2 border-r border-slate-300 font-medium">BNT 30项波士顿命名测验</td>
-                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{results.bnt.spontaneousScore} / 30 题</td>
+                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{hasBnt ? `${results.bnt.spontaneousScore} / 30 题` : "未评定"}</td>
                   <td className="p-2 border-r border-slate-300">切点 ≤ {results.bnt.cutoff} 题 ({results.bnt.group})</td>
-                  <td className="p-2 border-r border-slate-300">{results.bnt.isAbnormal ? "❌ 异常" : "✅ 正常"}</td>
+                  <td className="p-2 border-r border-slate-300">{hasBnt ? (results.bnt.isAbnormal ? "异常" : "正常") : "待评定"}</td>
                   <td className="p-2">语言命名与语义提取</td>
                 </tr>
                 <tr>
                   <td className="p-2 border-r border-slate-300 font-medium">MES 记忆与执行量表</td>
-                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{results.mes.score} / 100 分</td>
+                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{hasMes ? `${results.mes.score} / 100 分` : "未评定"}</td>
                   <td className="p-2 border-r border-slate-300">切点 ≤ {results.mes.cutoff} 分 ({results.mes.eduGroup})</td>
-                  <td className="p-2 border-r border-slate-300">{results.mes.isAbnormal ? "❌ 异常" : "✅ 正常"}</td>
+                  <td className="p-2 border-r border-slate-300">{hasMes ? (results.mes.isAbnormal ? "异常" : "正常") : "待评定"}</td>
                   <td className="p-2">记忆与执行综合功能</td>
                 </tr>
                 <tr>
                   <td className="p-2 border-r border-slate-300 font-medium">ADAS-Cog 认知总分</td>
-                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{adas.totalScore} / 70 分</td>
+                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{hasAdas ? `${adas.totalScore} / 70 分` : "未评定"}</td>
                   <td className="p-2 border-r border-slate-300">分级: {adas.severity}</td>
-                  <td className="p-2 border-r border-slate-300">{adas.totalScore <= 10 ? "✅ 正常" : "轻度受损"}</td>
+                  <td className="p-2 border-r border-slate-300">{hasAdas ? (adas.totalScore <= 10 ? "正常" : "轻度受损") : "待评定"}</td>
                   <td className="p-2">临床试验标准认知评分</td>
                 </tr>
                 <tr>
                   <td className="p-2 border-r border-slate-300 font-medium">Global CDR 临床痴呆评定</td>
-                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{cdr.globalCDR} 级 (SB: {cdr.cdrSumOfBoxes})</td>
+                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{hasCdr ? `${cdr.globalCDR} 级 (SB: ${cdr.cdrSumOfBoxes})` : "未评定"}</td>
                   <td className="p-2 border-r border-slate-300">SCD必须为 CDR = 0</td>
-                  <td className="p-2 border-r border-slate-300">{cdr.globalCDR === 0 ? "✅ 符合SCD" : "⚠️ 需注意"}</td>
+                  <td className="p-2 border-r border-slate-300">{hasCdr ? (cdr.globalCDR === 0 ? "符合SCD" : "需注意") : "待评定"}</td>
                   <td className="p-2">临床痴呆严重度分级</td>
                 </tr>
                 <tr>
                   <td className="p-2 border-r border-slate-300 font-medium">FAQ 日常活动能力调查表</td>
-                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{results.faq.score} / 30 分</td>
+                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{hasFaq ? `${results.faq.score} / 30 分` : "未评定"}</td>
                   <td className="p-2 border-r border-slate-300">受损切点 ≥ 5 分</td>
-                  <td className="p-2 border-r border-slate-300">{results.faq.isAbnormal ? "❌ 受损" : "✅ 独立"}</td>
+                  <td className="p-2 border-r border-slate-300">{hasFaq ? (results.faq.isAbnormal ? "受损" : "独立") : "待评定"}</td>
                   <td className="p-2">日常生活工具性活动</td>
                 </tr>
                 <tr>
                   <td className="p-2 border-r border-slate-300 font-medium">GDS-15 老年抑郁自评量表</td>
-                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{results.gds15.score} / 15 分</td>
+                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{hasGds ? `${results.gds15.score} / 15 分` : "未评定"}</td>
                   <td className="p-2 border-r border-slate-300">提示抑郁 ≥ 8 分</td>
-                  <td className="p-2 border-r border-slate-300">{results.gds15.isDepressed ? "⚠️ 抑郁症状" : "✅ 正常"}</td>
+                  <td className="p-2 border-r border-slate-300">{hasGds ? (results.gds15.isDepressed ? "抑郁症状" : "正常") : "待评定"}</td>
                   <td className="p-2">情绪与心理状态</td>
                 </tr>
                 <tr>
                   <td className="p-2 border-r border-slate-300 font-medium">PSQI 匹兹堡睡眠质量指数</td>
-                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{results.psqi.score} / 21 分</td>
+                  <td className="p-2 border-r border-slate-300 font-bold font-mono">{hasPsqi ? `${results.psqi.score} / 21 分` : "未评定"}</td>
                   <td className="p-2 border-r border-slate-300">障碍切点 ≥ 8 分</td>
-                  <td className="p-2 border-r border-slate-300">{results.psqi.isAbnormal ? "⚠️ 睡眠障碍" : "✅ 良好"}</td>
+                  <td className="p-2 border-r border-slate-300">{hasPsqi ? (results.psqi.isAbnormal ? "睡眠障碍" : "良好") : "待评定"}</td>
                   <td className="p-2">睡眠连续性与质量</td>
                 </tr>
               </tbody>
@@ -255,6 +288,7 @@ export const PrintReportModal: React.FC<Props> = ({ isOpen, onClose, record }) =
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };

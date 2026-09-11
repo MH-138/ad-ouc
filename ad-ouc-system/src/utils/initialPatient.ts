@@ -468,10 +468,22 @@ export function createEmptySubjectRecord(name = "", subjectNo = ""): SubjectReco
         attention: false,
         other: false,
       },
-      detailedQuestions: {} as any,
+      detailedQuestions: {
+        q1: { has: false },
+        q2: { has: false },
+        q3: { has: false },
+        q4: { has: false },
+        q5: { has: false },
+      },
       informant: {
         hasInformant: false,
-      } as any,
+        q1Memory: { has: false },
+        q2WordFinding: { has: false },
+        q3Planning: { has: false },
+        q4Attention: { has: false },
+        q5Other: { has: false },
+        q6Personality: { has: false },
+      },
       additional: {
         otherKnownCause: false,
         hasFluctuation: false,
@@ -549,6 +561,50 @@ export function createEmptySubjectRecord(name = "", subjectNo = ""): SubjectReco
       evaluatorSignature: "",
     },
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function mergeWithDefaults<T>(defaults: T, value: unknown): T {
+  if (Array.isArray(defaults)) {
+    return (Array.isArray(value) ? value : defaults) as T;
+  }
+
+  if (isRecord(defaults)) {
+    const incoming = isRecord(value) ? value : {};
+    const merged: Record<string, unknown> = { ...incoming };
+
+    for (const [key, defaultValue] of Object.entries(defaults)) {
+      merged[key] = mergeWithDefaults(defaultValue, incoming[key]);
+    }
+
+    return merged as T;
+  }
+
+  return (value === undefined || value === null ? defaults : value) as T;
+}
+
+/**
+ * Old local/Turso records may predate newer nested scale fields. Hydrate their
+ * shape before rendering so one missing scale cannot crash the whole React tree.
+ */
+export function hydrateSubjectRecord(value: unknown): SubjectRecord {
+  const raw = isRecord(value) ? value : {};
+  const demographics = isRecord(raw.demographics) ? raw.demographics : {};
+  const name = typeof demographics.name === "string"
+    ? demographics.name
+    : typeof raw.name === "string"
+      ? raw.name
+      : "";
+  const subjectNo = typeof raw.subjectNo === "string"
+    ? raw.subjectNo
+    : typeof raw.research_no === "string"
+      ? raw.research_no
+      : "";
+
+  return mergeWithDefaults(createEmptySubjectRecord(name, subjectNo), raw);
 }
 
 export const TYPICAL_SCD_PRESET: SubjectRecord = {
@@ -691,5 +747,3 @@ export const DEFAULT_COHORT: SubjectRecord[] = [
   BLANK_PATIENT_1_PRESET,
   BLANK_PATIENT_2_PRESET,
 ];
-
-
