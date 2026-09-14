@@ -57,6 +57,8 @@ const INITIAL_TIMERS: TimerItem[] = [
 interface TimerCenterProps {
   isOpen: boolean;
   onClose: () => void;
+  onSaveVft?: (count: number) => void;
+  onSaveStt?: (timeSec: number, type: "A" | "B") => void;
 }
 
 export const TimerCenter: React.FC<TimerCenterProps> = ({ isOpen, onClose }) => {
@@ -75,10 +77,10 @@ export const TimerCenter: React.FC<TimerCenterProps> = ({ isOpen, onClose }) => 
   // Sound generator using Web Audio API
   const playAlarmSound = () => {
     try {
-      const AudioContext =
+      const AudioCtx =
         window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!AudioContext) return;
-      const ctx = new AudioContext();
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
 
       const playBeep = (freq: number, start: number, duration: number) => {
         const osc = ctx.createOscillator();

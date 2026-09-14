@@ -77,26 +77,33 @@ export function exportRecordToExcel(record: SubjectRecord, options: ExportOption
   ];
 
   // Sheet 2: 神经心理量表测试汇总表
+  // BUG-EXPORT-02: 未作答量表显示 "--" 且不套用阈值灯色，避免空白患者被误判为重度异常/正常
+  const unassessed = (s: any) => s && s.isAssessed === false;
+  const sc = (s: any, value: any) => (unassessed(s) ? "--" : value);
+  const warn = (s: any, normal: string, abnormal: string) =>
+    unassessed(s) ? "⚪ 未评估" : s.isAbnormal ? `🔴 ${abnormal}` : `🟢 ${normal}`;
+  const cdrUnassessed = !(record.scales?.cdr && Object.values(record.scales.cdr).some((v: any) => v != null));
+
   const scalesData = [
     ["量表代码", "量表名称", "测试得分", "常模参考界值", "健康状态预警", "靶向评估认知域"],
-    ["SCD-Q9", "主观认知下降自测表", summary.scdQ9.score, "≥5 分提示主诉显著", summary.scdQ9.isPositive ? "🟡 主诉阳性" : "🟢 正常", "主观记忆主诉与担忧"],
-    ["MMSE", "简易精神状态检查", summary.mmse.score, `≤${summary.mmse.cutoff} 分 (${summary.mmse.eduGroup})`, summary.mmse.isAbnormal ? "🔴 异常损害" : "🟢 正常", "总体认知初筛"],
-    ["MoCA-B", "蒙特利尔认知基础量表", summary.mocaB.score, `≤${summary.mocaB.cutoff} 分 (${summary.mocaB.eduGroup})`, summary.mocaB.isAbnormal ? "🔴 异常损害" : "🟢 正常", "全面认知与执行力"],
-    ["AVLT-N5", "华山版听觉长延迟回忆", summary.avltH.n5LongDelay, `≤${summary.avltH.delayCutoff} 词 (${summary.avltH.ageGroup})`, summary.avltH.isDelayAbnormal ? "🔴 显著受损" : "🟢 正常", "情景记忆 (海马依赖)"],
-    ["AVLT-N7", "听觉词语再认识别", summary.avltH.n7Recognition, `≤${summary.avltH.recognitionCutoff} 词`, summary.avltH.isRecognitionAbnormal ? "🔴 异常" : "🟢 正常", "记忆再认提取"],
-    ["VFT", "动物词语流畅性 (1分钟)", summary.vft.totalScore, `≤${summary.vft.cutoff} 词 (${summary.vft.eduGroup})`, summary.vft.isAbnormal ? "🔴 异常" : "🟢 正常", "语言流畅性与语义提取"],
-    ["BNT-30", "波士顿命名自发命名", summary.bnt.spontaneousScore, `≤${summary.bnt.cutoff} 分 (${summary.bnt.eduGroup})`, summary.bnt.isAbnormal ? "🔴 找词困难" : "🟢 正常", "视觉命名与语言表达"],
-    ["STT-A", "形状连线 A 耗时", `${summary.stt.sttATotal} 秒`, `>${summary.stt.aCutoff} 秒`, summary.stt.isAAbnormal ? "🔴 速度迟缓" : "🟢 正常", "信息处理速度与注意"],
-    ["STT-B", "形状连线 B 耗时", `${summary.stt.sttBTotal} 秒`, `>${summary.stt.bCutoff} 秒`, summary.stt.isBAbnormal ? "🔴 转换受损" : "🟢 正常", "认知灵活性与执行控制"],
-    ["MES", "记忆与执行量表 (100分)", summary.mes.score, `≤${summary.mes.cutoff} 分`, summary.mes.isAbnormal ? "🔴 执行下降" : "🟢 正常", "综合记忆与动作执行"],
-    ["Global CDR", "临床痴呆评定等级", cdrResult.globalCDR, "0:正常 / 0.5:MCI / 1:轻度痴呆", cdrResult.globalCDR === 0 ? "🟢 正常/SCD" : cdrResult.globalCDR === 0.5 ? "🟡 可疑/MCI" : "🔴 痴呆", "临床痴呆分级 (华盛顿大学)"],
-    ["CDR-SB", "CDR 箱总分", cdrResult.sumOfBoxes, "0-18 分", cdrResult.sumOfBoxes > 0 ? "需关注" : "正常", "严重度累积积分"],
-    ["FAQ", "功能活动问卷 (10项)", summary.faq.sum, "≥9 分提示日常生活受损", summary.faq.isAbnormal ? "🔴 独立能力受损" : "🟢 生活自理良好", "工具性日常生活活动 (IADL)"],
-    ["GDS-15", "老年抑郁自评量表", summary.gds15.score, "≥8 分提示抑郁情绪", summary.gds15.isDepressed ? "🟡 存在抑郁情绪" : "🟢 情绪良好", "老年情绪筛查"],
-    ["HAMD-17", "汉密尔顿抑郁量表", summary.hamd17.total, "<7:正常 / ≥7:可能 / ≥17:肯定", summary.hamd17.isAbnormal ? "🟡 抑郁症状" : "🟢 无抑郁", "抑郁严重度评定"],
-    ["HAMA-14", "汉密尔顿焦虑量表", summary.hama.total, "<7:无 / ≥7:可能 / ≥14:肯定", summary.hama.isAbnormal ? "🟡 焦虑症状" : "🟢 无焦虑", "焦虑严重度评定"],
-    ["NPI", "神经精神问卷 (12域)", `总分: ${summary.npi.totalScore} / 痛苦值: ${summary.npi.distressScore}`, "症状域数: " + summary.npi.symptomCount, summary.npi.totalScore > 0 ? "🟡 存在精神行为症状" : "🟢 无异常", "精神行为症状 (BPSD)"],
-    ["PSQI", "匹兹堡睡眠质量指数", summary.psqi.score, ">7 分提示睡眠质量差", summary.psqi.isAbnormal ? "🟡 睡眠障碍" : "🟢 睡眠良好", "主观睡眠质量与效率"],
+    ["SCD-Q9", "主观认知下降自测表", sc(summary.scdQ9, summary.scdQ9.score), "≥5 分提示主诉显著", unassessed(summary.scdQ9) ? "⚪ 未评估" : summary.scdQ9.isPositive ? "🟡 主诉阳性" : "🟢 正常", "主观记忆主诉与担忧"],
+    ["MMSE", "简易精神状态检查", sc(summary.mmse, summary.mmse.score), `≤${summary.mmse.cutoff} 分 (${summary.mmse.eduGroup})`, warn(summary.mmse, "正常", "异常损害"), "总体认知初筛"],
+    ["MoCA-B", "蒙特利尔认知基础量表", sc(summary.mocaB, summary.mocaB.score), `≤${summary.mocaB.cutoff} 分 (${summary.mocaB.eduGroup})`, warn(summary.mocaB, "正常", "异常损害"), "全面认知与执行力"],
+    ["AVLT-N5", "华山版听觉长延迟回忆", sc(summary.avltH, summary.avltH.n5LongDelay), `≤${summary.avltH.delayCutoff} 词 (${summary.avltH.ageGroup})`, warn(summary.avltH, "正常", "显著受损"), "情景记忆 (海马依赖)"],
+    ["AVLT-N7", "听觉词语再认识别", sc(summary.avltH, summary.avltH.n7Recognition), `≤${summary.avltH.recognitionCutoff} 词`, warn(summary.avltH, "正常", "异常"), "记忆再认提取"],
+    ["VFT", "动物词语流畅性 (1分钟)", sc(summary.vft, summary.vft.totalScore), `≤${summary.vft.cutoff} 词 (${summary.vft.eduGroup})`, warn(summary.vft, "正常", "异常"), "语言流畅性与语义提取"],
+    ["BNT-30", "波士顿命名自发命名", sc(summary.bnt, summary.bnt.spontaneousScore), `≤${summary.bnt.cutoff} 分 (${summary.bnt.eduGroup})`, warn(summary.bnt, "正常", "找词困难"), "视觉命名与语言表达"],
+    ["STT-A", "形状连线 A 耗时", sc(summary.stt, `${summary.stt.sttATotal} 秒`), `>${summary.stt.aCutoff} 秒`, warn(summary.stt, "正常", "速度迟缓"), "信息处理速度与注意"],
+    ["STT-B", "形状连线 B 耗时", sc(summary.stt, `${summary.stt.sttBTotal} 秒`), `>${summary.stt.bCutoff} 秒`, warn(summary.stt, "正常", "转换受损"), "认知灵活性与执行控制"],
+    ["MES", "记忆与执行量表 (100分)", sc(summary.mes, summary.mes.score), `≤${summary.mes.cutoff} 分`, warn(summary.mes, "正常", "执行下降"), "综合记忆与动作执行"],
+    ["Global CDR", "临床痴呆评定等级", cdrUnassessed ? "--" : cdrResult.globalCDR, "0:正常 / 0.5:MCI / 1:轻度痴呆", cdrUnassessed ? "⚪ 未评估" : cdrResult.globalCDR === 0 ? "🟢 正常/SCD" : cdrResult.globalCDR === 0.5 ? "🟡 可疑/MCI" : "🔴 痴呆", "临床痴呆分级 (华盛顿大学)"],
+    ["CDR-SB", "CDR 箱总分", cdrUnassessed ? "--" : cdrResult.sumOfBoxes, "0-18 分", cdrUnassessed ? "⚪ 未评估" : cdrResult.sumOfBoxes > 0 ? "需关注" : "正常", "严重度累积积分"],
+    ["FAQ", "功能活动问卷 (10项)", sc(summary.faq, summary.faq.sum), "≥9 分提示日常生活受损", warn(summary.faq, "生活自理良好", "独立能力受损"), "工具性日常生活活动 (IADL)"],
+    ["GDS-15", "老年抑郁自评量表", sc(summary.gds15, summary.gds15.score), "≥8 分提示抑郁情绪", warn(summary.gds15, "情绪良好", "存在抑郁情绪"), "老年情绪筛查"],
+    ["HAMD-17", "汉密尔顿抑郁量表", sc(summary.hamd17, summary.hamd17.total), "<7:正常 / ≥7:可能 / ≥17:肯定", warn(summary.hamd17, "无抑郁", "抑郁症状"), "抑郁严重度评定"],
+    ["HAMA-14", "汉密尔顿焦虑量表", sc(summary.hama, summary.hama.total), "<7:无 / ≥7:可能 / ≥14:肯定", warn(summary.hama, "无焦虑", "焦虑症状"), "焦虑严重度评定"],
+    ["NPI", "神经精神问卷 (12域)", sc(summary.npi, `总分: ${summary.npi.totalScore} / 痛苦值: ${summary.npi.distressScore}`), "症状域数: " + summary.npi.symptomCount, unassessed(summary.npi) ? "⚪ 未评估" : summary.npi.totalScore > 0 ? "🟡 存在精神行为症状" : "🟢 无异常", "精神行为症状 (BPSD)"],
+    ["PSQI", "匹兹堡睡眠质量指数", sc(summary.psqi, summary.psqi.score), ">7 分提示睡眠质量差", warn(summary.psqi, "睡眠良好", "睡眠障碍"), "主观睡眠质量与效率"],
   ];
 
   // Sheet 3: 诊断结论与干预建议
@@ -127,7 +134,9 @@ export function exportRecordToExcel(record: SubjectRecord, options: ExportOption
   XLSX.utils.book_append_sheet(wb, ws3, "临床诊断与随访建议");
 
   // Trigger download
-  const filename = `宣武医院_SCD认知评定_${displayName || "受试者"}_${record.evalDate || new Date().toISOString().slice(0, 10)}.xlsx`;
+  // BUG-EXPORT-03: 文件名对 Windows 非法字符（\ / : * ? " < > |）做替换，避免脱敏后含 * 等导致 XLSX.writeFile 抛 ENOENT
+  const safeFileNamePart = (s: string) => (s || "").replace(/[\\/:*?"<>|]/g, "_");
+  const filename = `宣武医院_SCD认知评定_${safeFileNamePart(displayName || "受试者")}_${safeFileNamePart(record.evalDate || new Date().toISOString().slice(0, 10))}.xlsx`;
   XLSX.writeFile(wb, filename);
 }
 
@@ -177,6 +186,11 @@ export function exportCohortToExcel(cohort: SubjectRecord[], options: ExportOpti
     const sum = evaluateCompleteAssessment(rec);
     const cdr = calculateCDRWashington(rec.scales.cdr);
     const dName = anonymize ? anonymizeName(rec.demographics?.name) : rec.demographics?.name;
+    // BUG-EXPORT-02: 未作答量表在科研数据集中显示 "--" 而非伪造的 0 分
+    const un = (s: any) => s && s.isAssessed === false;
+    const cval = (s: any, v: any) => (un(s) ? "--" : v);
+    const cwarn = (s: any, n: string, a: string) => (un(s) ? "未评估" : s.isAbnormal ? a : n);
+    const cdrUn = !(rec.scales?.cdr && Object.values(rec.scales.cdr).some((v: any) => v != null));
 
     return [
       rec.subjectNo,
@@ -188,28 +202,28 @@ export function exportCohortToExcel(cohort: SubjectRecord[], options: ExportOpti
       rec.demographics?.age,
       rec.demographics?.educationYears,
       rec.evalDate,
-      sum.scdQ9.score,
-      sum.scdQ9.isPositive ? "阳性" : "阴性",
-      sum.mmse.score,
+      cval(sum.scdQ9, sum.scdQ9.score),
+      un(sum.scdQ9) ? "未评估" : sum.scdQ9.isPositive ? "阳性" : "阴性",
+      cval(sum.mmse, sum.mmse.score),
       sum.mmse.cutoff,
-      sum.mmse.isAbnormal ? "异常" : "正常",
-      sum.mocaB.score,
+      cwarn(sum.mmse, "正常", "异常"),
+      cval(sum.mocaB, sum.mocaB.score),
       sum.mocaB.cutoff,
-      sum.mocaB.isAbnormal ? "异常" : "正常",
-      sum.avltH.n5LongDelay,
-      sum.avltH.isRecognitionAbnormal ? "异常" : "正常",
-      sum.vft.totalScore,
-      sum.bnt.spontaneousScore,
-      sum.stt.sttATotal,
-      sum.stt.sttBTotal,
-      cdr.globalCDR,
-      cdr.sumOfBoxes,
-      sum.faq.sum,
-      sum.hamd17.total,
-      sum.hama.total,
-      sum.npi.symptomCount,
-      sum.npi.totalScore,
-      sum.psqi.score,
+      cwarn(sum.mocaB, "正常", "异常"),
+      cval(sum.avltH, sum.avltH.n5LongDelay),
+      cwarn(sum.avltH, "正常", "异常"),
+      cval(sum.vft, sum.vft.totalScore),
+      cval(sum.bnt, sum.bnt.spontaneousScore),
+      cval(sum.stt, sum.stt.sttATotal),
+      cval(sum.stt, sum.stt.sttBTotal),
+      cdrUn ? "--" : cdr.globalCDR,
+      cdrUn ? "--" : cdr.sumOfBoxes,
+      cval(sum.faq, sum.faq.sum),
+      cval(sum.hamd17, sum.hamd17.total),
+      cval(sum.hama, sum.hama.total),
+      cval(sum.npi, sum.npi.symptomCount),
+      cval(sum.npi, sum.npi.totalScore),
+      cval(sum.psqi, sum.psqi.score),
       getDiagnosisName(rec.diagnosis?.category),
       rec.diagnosis?.notes || "",
     ];

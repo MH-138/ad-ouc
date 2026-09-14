@@ -145,7 +145,7 @@ export const InformantInterviewPage: React.FC<InformantInterviewPageProps> = ({
   };
 
   const updateCdrDomain = (
-    domain: "memory" | "orientation" | "judgment" | "community" | "home" | "care",
+    domain: "memory" | "orientation" | "judgment" | "community" | "homeHobbies" | "personalCare",
     val: number
   ) => {
     handleUpdateRecord({
@@ -678,12 +678,12 @@ export const InformantInterviewPage: React.FC<InformantInterviewPageProps> = ({
                     desc: "独自在单位工作、参与社区活动、银行购物交涉",
                   },
                   {
-                    key: "home" as const,
+                    key: "homeHobbies" as const,
                     name: "5. 家居与业余爱好 (Home and Hobbies)",
                     desc: "做家务、烹饪、园艺、使用工具的熟练程度",
                   },
                   {
-                    key: "care" as const,
+                    key: "personalCare" as const,
                     name: "6. 个人照料能力 (Personal Care)",
                     desc: "穿衣、洗漱、个人卫生、进食自理",
                   },

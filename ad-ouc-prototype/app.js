@@ -83,7 +83,10 @@
     scaleCompleted: false,   // 防止量表完成提示和结果重复写入
     intakeSource: null,      // manual / table_import
     intakeOriginRole: null,  // 表格导入发起角色
-    _timer: null             // 计时器句柄
+    _timer: null,            // 计时器句柄
+    loggedIn: false,         // 是否已登录（演示级，纯前端，不联网）
+    user: null,              // { name, role, pwd }
+    logs: []                 // 操作日志 [{time, action, detail}]
   };
 
   /* ---------- 工具 ---------- */
@@ -106,6 +109,7 @@
       delete copy._timer;
       localStorage.setItem(STORE_KEY, JSON.stringify(copy));
       setSaveStatus("已保存", "saved");
+      queueSync();
     } catch (e) { /* 忽略存储异常 */ }
   }
   function setSaveStatus(text, tone) {
@@ -123,6 +127,98 @@
       Object.keys(o).forEach(function (k) { state[k] = o[k]; });
       return true;
     } catch (e) { return false; }
+  }
+
+  /* ---------- 操作日志（演示级，仅本地记录） ---------- */
+  function logAction(action, detail) {
+    if (!Array.isArray(state.logs)) state.logs = [];
+    state.logs.push({ time: nowStr(), action: action, detail: detail || "" });
+    if (state.logs.length > 200) state.logs = state.logs.slice(-200);
+  }
+
+  /* ---------- 云端同步（与后端数据库对接） ---------- */
+  var _syncTimer = null, _syncBusy = false;
+  function setCloudStatus(text, tone) {
+    var n = $("cloudStatus");
+    if (!n) return;
+    n.textContent = text;
+    n.className = "cloud-status" + (tone ? " " + tone : "");
+  }
+  function queueSync() {
+    if (!window.API || !window.API.isEnabled()) return;
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+    if (_syncTimer) return;
+    _syncTimer = setTimeout(function () { _syncTimer = null; doSync(); }, 800);
+  }
+  function doSync() {
+    var p = state.patient;
+    if (!p || !p.code || _syncBusy) return;
+    var rec = state.patients.filter(function (x) { return x.patient.code === p.code; })[0];
+    if (!rec) return;
+    _syncBusy = true;
+    setCloudStatus("云端同步中…", "syncing");
+    window.API.upsertPatient({
+      code: p.code, name: p.name,
+      profile: { code: p.code, name: p.name, gender: p.gender, birth: p.birth, age: p.age,
+                 edu: p.edu, height: p.height, weight: p.weight, marry: p.marry, live: p.live,
+                 phone: p.phone, time: p.time }
+    }).then(function () {
+      return Promise.all((rec.results || []).map(function (r) {
+        return window.API.upsertAssessment(p.code, {
+          scale_key: r.scale, scale_name: r.name, role: state.role,
+          score: r.score, level: r.level, label: r.label,
+          gscore: r.global, dimensions: r.dimensions || null,
+          answers: r.answers || null, status: "completed"
+        });
+      }));
+    }).then(function () {
+      setCloudStatus("已同步云端", "synced");
+    }).catch(function () {
+      setCloudStatus("云端同步失败（本地已存）", "error");
+    }).then(function () { _syncBusy = false; });
+  }
+  function importFromCloud() {
+    if (!window.API || !window.API.isEnabled()) {
+      alert("云端同步未启用，请确认后端服务已启动（默认 http://localhost:8000）。");
+      return;
+    }
+    setCloudStatus("正在从云端拉取…", "syncing");
+    window.API.getPatients().then(function (res) {
+      if (!res.success || !res.data) throw new Error("list failed");
+      var list = res.data;
+      var tasks = list.map(function (sp) {
+        return window.API.getPatient(sp.code).then(function (r) {
+          if (!r.success) return;
+          var d = r.data;
+          var profile = (d.profile && typeof d.profile === "object") ? d.profile : d;
+          var rec = state.patients.filter(function (x) { return x.patient.code === sp.code; })[0];
+          if (!rec) { rec = { patient: {}, results: [] }; state.patients.push(rec); }
+          rec.patient = {
+            code: profile.code || sp.code, name: profile.name, gender: profile.gender,
+            birth: profile.birth, age: profile.age, edu: profile.edu, height: profile.height,
+            weight: profile.weight, marry: profile.marry, live: profile.live,
+            phone: profile.phone, time: profile.time
+          };
+          (d.assessments || []).forEach(function (a) {
+            rec.results = rec.results.filter(function (x) { return x.scale !== a.scaleKey; });
+            rec.results.push({
+              scale: a.scaleKey, name: a.scaleName, score: a.score, level: a.level,
+              label: a.label, time: a.completedAt, global: a.global,
+              dimensions: a.dimensions, answers: a.answers
+            });
+          });
+        });
+      });
+      return Promise.all(tasks);
+    }).then(function () {
+      save();
+      logAction("云端加载", "同步 " + state.patients.length + " 位患者");
+      renderHome();
+      setCloudStatus("已从云端加载 " + state.patients.length + " 位患者", "synced");
+      botSay("已从云端同步 " + state.patients.length + " 位患者到本地。", "blue");
+    }).catch(function (e) {
+      setCloudStatus("云端拉取失败：" + (e && e.error && e.error.message ? e.error.message : "网络错误"), "error");
+    });
   }
 
   /* ---------- 计分 ---------- */
@@ -226,6 +322,11 @@
     } else {
       dot.textContent = "● 在线";
       dot.className = "offline";
+    }
+    var ub = $("userBadge");
+    if (ub) {
+      if (state.user && state.user.name) { ub.hidden = false; ub.textContent = "👤 " + state.user.name; }
+      else ub.hidden = true;
     }
   }
 
@@ -393,6 +494,9 @@
     }
     if (!ROLES[state.role]) state.role = "rater";
     if (!state.drafts || typeof state.drafts !== "object") state.drafts = {};
+    if (state.loggedIn !== true) state.loggedIn = false;
+    if (!state.user || typeof state.user !== "object") state.user = null;
+    if (!Array.isArray(state.logs)) state.logs = [];
   }
   function renderProgress(container, flow) {
     var wrap = el("div", "progress-wrap");
@@ -635,6 +739,7 @@
       state.intakeCompleted = true;
       botSay("建档完成！研究编号：" + patient.code + (age != null ? "，自动算得年龄 " + age + " 岁。" : "。"));
       botSay("接下来可以做几个小测验，帮您了解记忆和情绪状况～");
+      logAction("建档", patient.code + " " + (patient.name || "—"));
       save();
     }
   }
@@ -740,11 +845,13 @@
             scale: state.flow.short, name: state.flow.name, score: r.total, level: r.level,
             label: r.label, time: nowStr(),
             global: (r.details && r.details.global != null) ? r.details.global : null,
-            dimensions: r.dimensions
+            dimensions: r.dimensions,
+            answers: state.answers
           });
         }
       }
       state.scaleCompleted = true;
+      logAction("量表评估", state.flow.short + " 总分 " + fmt(r.total) + " " + r.label);
       save();
     }
   }
@@ -825,12 +932,17 @@
     }
 
     if (state.channel === "rater") {
+      h.appendChild(renderDashboard());
       h.appendChild(bigBtn("➕ 录入患者基础信息", function () { startIntake("rater"); }, "primary guide"));
       h.appendChild(bigBtn("⇧ 上传表格自动填充", choosePatientFile, "secondary"));
+      h.appendChild(bigBtn("☁ 从云端加载患者", importFromCloud, "secondary"));
+      h.appendChild(bigBtn("🎭 加载演示数据（Mock）", loadMockData, "secondary"));
       if (state.patient) h.appendChild(bigBtn("📋 选择量表评估", showScaleMenu, "secondary"));
       h.appendChild(bigBtn("🩺 综合诊断报告", showReport, "secondary"));
       if (state.patients.length) h.appendChild(bigBtn("📤 导出 Excel", showExportMenu, "secondary"));
       if (state.patients.length) h.appendChild(bigBtn("🗂 患者列表（管理）", showPatientList, "secondary"));
+      h.appendChild(bigBtn("📜 操作日志", showLogPanel, "secondary"));
+      h.appendChild(bigBtn("⚙ 账号管理", showAccountPanel, "secondary"));
     } else if (state.channel === "self") {
       if (!state.patient) {
         h.appendChild(bigBtn("开始填写基础信息", startSubjectIntake, "primary guide"));
@@ -1135,9 +1247,11 @@
     var a = document.createElement("a");
     a.href = url; a.download = "认知筛查数据_" + (new Date().getFullYear()) + ("0"+(new Date().getMonth()+1)).slice(-2) + ("0"+new Date().getDate()).slice(-2) + ".xls";
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    logAction("导出Excel", records.length + " 位患者");
     botSay("✅ 已生成 Excel 文件，请到下载目录查看。");
     renderChat();
+    save();
   }
   function buildXls(records, anonym) {
     var keys = Object.keys(window.SCALES);
@@ -1253,6 +1367,9 @@
     var close = el("button", "rep-close", "✕");
     close.onclick = function () { box.style.display = "none"; };
     hd.appendChild(close);
+    var printBtn = el("button", "rep-print", "🖨 打印 / 导出 PDF");
+    printBtn.onclick = function () { window.print(); };
+    hd.appendChild(printBtn);
     box.appendChild(hd);
 
     var rec = currentRec();
@@ -1302,6 +1419,12 @@
     var close = el("button", "rep-close", "✕");
     close.onclick = function () { box.style.display = "none"; };
     hd.appendChild(close);
+    var cloudBtn = el("button", "rep-cloud", "☁ 从云端加载");
+    cloudBtn.onclick = function () { importFromCloud(); };
+    hd.appendChild(cloudBtn);
+    var printBtn = el("button", "rep-print", "🖨 打印 / 导出 PDF");
+    printBtn.onclick = function () { window.print(); };
+    hd.appendChild(printBtn);
     box.appendChild(hd);
 
     var body = el("div", "rep-body");
@@ -1373,20 +1496,214 @@
     box.style.display = "flex";
   }
 
+  /* ---------- 登录门禁（演示级，纯前端，不联网） ---------- */
+  function showLogin() { var o = $("loginOverlay"); if (o) o.style.display = "flex"; }
+  function hideLogin() { var o = $("loginOverlay"); if (o) o.style.display = "none"; }
+  function setupLogin() {
+    var b = $("loginBtn"); if (!b || b.dataset.bound) return; b.dataset.bound = "1";
+    b.onclick = function () {
+      var u = ($("loginUser").value || "").trim();
+      var p = $("loginPwd").value || "";
+      var role = $("loginRole") ? $("loginRole").value : "rater";
+      if (!u) { alert("请输入用户名"); return; }
+      // 演示校验：admin 账号需正确密码；其他用户名任意密码放行
+      if (u === "admin" && p !== "123456") { alert("演示密码错误（应为 123456）"); return; }
+      state.loggedIn = true;
+      if (!state.user) state.user = {};
+      state.user.name = u;
+      state.user.role = role;
+      state.user.pwd = p;
+      state.role = role; state.channel = role; // 同步首页通道
+      hideLogin();
+      renderTop(); renderHome(); switchView();
+      logAction("登录", "用户 " + u + " / " + ROLES[role].tag);
+      save();
+    };
+    [$("loginUser"), $("loginPwd")].forEach(function (inp) {
+      if (inp) inp.addEventListener("keydown", function (e) { if (e.key === "Enter") b.onclick(); });
+    });
+  }
+  function logout() {
+    if (!confirm("确定退出登录？本地患者数据会保留。")) return;
+    state.loggedIn = false;
+    save();
+    showLogin();
+  }
+
+  /* ---------- 操作日志面板 ---------- */
+  function showLogPanel() {
+    var box = $("report");
+    box.innerHTML = "";
+    var hd = el("div", "rep-hd", "📜 操作日志");
+    var close = el("button", "rep-close", "✕");
+    close.onclick = function () { box.style.display = "none"; };
+    hd.appendChild(close);
+    var clearBtn = el("button", "rep-cloud", "🗑 清空");
+    clearBtn.onclick = function () {
+      if (!confirm("确定清空本地操作日志？")) return;
+      state.logs = []; save(); showLogPanel();
+    };
+    hd.appendChild(clearBtn);
+    box.appendChild(hd);
+    var body = el("div", "rep-body");
+    if (!state.logs.length) {
+      body.appendChild(el("div", "rep-p", "暂无操作记录。建档、量表评估、导出、云端加载等动作会自动写入本日志。"));
+    } else {
+      var list = el("div", "log-list");
+      state.logs.slice().reverse().forEach(function (l) {
+        var item = el("div", "log-item");
+        item.innerHTML = "<span class='log-time'>" + escapeHtml(l.time) + "</span>" +
+          "<span class='log-action'>" + escapeHtml(l.action) + "</span>" +
+          "<span class='log-detail'>" + escapeHtml(l.detail || "") + "</span>";
+        list.appendChild(item);
+      });
+      body.appendChild(list);
+    }
+    box.appendChild(body);
+    box.style.display = "flex";
+  }
+
+  /* ---------- 账号管理面板（演示级） ---------- */
+  function showAccountPanel() {
+    var box = $("report");
+    box.innerHTML = "";
+    var hd = el("div", "rep-hd", "⚙ 账号管理（演示）");
+    var close = el("button", "rep-close", "✕");
+    close.onclick = function () { box.style.display = "none"; };
+    hd.appendChild(close);
+    box.appendChild(hd);
+    var body = el("div", "rep-body");
+    var u = state.user || { name: "（未登录）", role: state.role };
+    body.appendChild(el("div", "rep-p", "当前用户：" + escapeHtml(u.name || "—") +
+      "　角色：" + (ROLES[u.role] ? ROLES[u.role].name : u.role)));
+    body.appendChild(el("div", "hint", "修改登录密码（仅本地保存，演示环境不联网、不加密）："));
+    var input = el("input", "textin"); input.type = "password"; input.placeholder = "输入新密码";
+    body.appendChild(input);
+    body.appendChild(bigBtn("保存密码", function () {
+      var np = input.value.trim();
+      if (!np) { alert("请输入新密码"); return; }
+      if (!state.user) state.user = { name: "admin", role: state.role };
+      state.user.pwd = np;
+      save();
+      alert("密码已更新（本地演示）。");
+      box.style.display = "none";
+    }));
+    box.appendChild(body);
+    box.style.display = "flex";
+  }
+
+  /* ---------- 数据看板（医师首页统计卡片） ---------- */
+  function renderDashboard() {
+    if (state.channel !== "rater") return null;
+    var total = state.patients.length;
+    var red = 0, yellow = 0, green = 0, scales = 0;
+    var kinds = {}, kindOrder = [];
+    state.patients.forEach(function (rec) {
+      (rec.results || []).forEach(function (r) {
+        scales++;
+        if (r.level === "red") red++;
+        else if (r.level === "yellow") yellow++;
+        else green++;
+        if (!kinds[r.scale]) { kinds[r.scale] = 0; kindOrder.push(r.scale); }
+        kinds[r.scale]++;
+      });
+    });
+    var wrap = el("div", "dash");
+    wrap.appendChild(el("div", "dash-title", "📊 数据看板（演示统计）"));
+    var grid = el("div", "dash-grid");
+    [
+      { n: total, label: "建档人数", cls: "blue" },
+      { n: scales, label: "测评记录", cls: "blue" },
+      { n: kindOrder.length, label: "量表覆盖", cls: "blue" },
+      { n: red, label: "异常(红)", cls: "red" },
+      { n: yellow, label: "临界(黄)", cls: "yellow" },
+      { n: green, label: "正常(绿)", cls: "green" }
+    ].forEach(function (c) {
+      var card = el("div", "dash-card " + c.cls);
+      card.appendChild(el("div", "dash-n", String(c.n)));
+      card.appendChild(el("div", "dash-l", c.label));
+      grid.appendChild(card);
+    });
+    wrap.appendChild(grid);
+    if (kindOrder.length) {
+      var note = el("div", "dash-note");
+      note.textContent = "已覆盖量表：" + kindOrder.map(function (k) { return k + "×" + kinds[k]; }).join("　");
+      wrap.appendChild(note);
+    }
+    return wrap;
+  }
+
+  /* ---------- 演示数据（Mock，无需后端即可独立演示） ---------- */
+  function loadMockData() {
+    if (state.patients.length &&
+        !confirm("已存在 " + state.patients.length + " 位患者，演示数据将追加到现有列表。\n确定=追加演示数据，取消=取消")) {
+      return;
+    }
+    var samples = [
+      {
+        p: { code: "S26-1001", name: "张明华", gender: "男", birth: 1949, age: 77, edu: 9,
+             height: 170, weight: 68, marry: "已婚", live: "与子女同住", phone: "13800001001", time: "2026-09-01 09:12" },
+        results: [
+          { scale: "SCD-Q9", name: "主观认知下降自测表", score: 11, level: "red", label: "明显主观认知下降", dimensions: null, answers: {} },
+          { scale: "MMSE", name: "简明精神状态检查", score: 18, level: "red", label: "中度认知障碍", dimensions: null, answers: {} },
+          { scale: "MoCA-B", name: "蒙特利尔认知评估基础量表", score: 14, level: "red", label: "认知功能明显受损", dimensions: null, answers: {} },
+          { scale: "CDR", name: "临床痴呆评定量表", score: 6.5, level: "red",
+            label: "CDR-SB 6.5 · Global 2（中度痴呆）", global: 2, dimensions: null, answers: {} },
+          { scale: "FAQ", name: "功能活动问卷", score: 18, level: "red", label: "日常功能明显依赖", dimensions: null, answers: {} }
+        ]
+      },
+      {
+        p: { code: "S26-1002", name: "李秀兰", gender: "女", birth: 1954, age: 72, edu: 12,
+             height: 160, weight: 60, marry: "已婚", live: "独居", phone: "13800001002", time: "2026-09-03 14:30" },
+        results: [
+          { scale: "SCD-Q9", name: "主观认知下降自测表", score: 6, level: "yellow", label: "轻度主观认知下降", dimensions: null, answers: {} },
+          { scale: "MMSE", name: "简明精神状态检查", score: 25, level: "yellow", label: "临界偏低", dimensions: null, answers: {} },
+          { scale: "MoCA-B", name: "蒙特利尔认知评估基础量表", score: 22, level: "yellow", label: "临界", dimensions: null, answers: {} },
+          { scale: "VFT", name: "词语流畅性测验", score: 12, level: "yellow", label: "流畅性偏低", dimensions: null, answers: {} }
+        ]
+      },
+      {
+        p: { code: "S26-1003", name: "王建国", gender: "男", birth: 1968, age: 58, edu: 15,
+             height: 175, weight: 75, marry: "已婚", live: "与配偶同住", phone: "13800001003", time: "2026-09-05 10:48" },
+        results: [
+          { scale: "SCD-Q9", name: "主观认知下降自测表", score: 2, level: "green", label: "基本正常", dimensions: null, answers: {} },
+          { scale: "MMSE", name: "简明精神状态检查", score: 29, level: "green", label: "正常范围", dimensions: null, answers: {} },
+          { scale: "MoCA-B", name: "蒙特利尔认知评估基础量表", score: 27, level: "green", label: "正常", dimensions: null, answers: {} },
+          { scale: "HAMD", name: "汉密尔顿抑郁量表", score: 6, level: "green", label: "无抑郁", dimensions: null, answers: {} },
+          { scale: "HAMA", name: "汉密尔顿焦虑量表", score: 5, level: "green", label: "无焦虑", dimensions: null, answers: {} }
+        ]
+      }
+    ];
+    samples.forEach(function (s) {
+      var existing = state.patients.filter(function (x) { return x.patient.code === s.p.code; })[0];
+      if (existing) { existing.patient = s.p; existing.results = s.results; }
+      else state.patients.push({ patient: s.p, results: s.results });
+    });
+    logAction("加载演示数据", "3 位示例患者（Mock）");
+    save();
+    renderHome();
+    switchView();
+    alert("已加载 3 位演示患者（含完整测评记录），可在「患者列表」查看、报告或导出。");
+  }
+
   /* ---------- 初始化 ---------- */
   function init() {
     $("roleSelect").onchange = onRoleChange;
     $("btnHome").onclick = goHome;
     $("patientFileInput").onchange = handlePatientFile;
+    $("acctBtn").onclick = showAccountPanel;
+    $("logoutBtn").onclick = logout;
     load();
     normalizeState();
     renderHome();
     switchView();
+    setupLogin();
+    renderTop();
+    if (!state.loggedIn) showLogin(); else hideLogin();
     window.addEventListener("online", renderTop);
     window.addEventListener("offline", renderTop);
     // 兜底：intake 结束时 patient 还没生成（如从续聊恢复），再次触发
     if (state.view === "chat" && state.flowType === "intake") finishIntakeIfNeeded();
-    renderTop();
   }
 
   // answer 之后也要检查收尾

@@ -14,7 +14,8 @@ export const MocaBPage: React.FC<MocaBPageProps> = ({ record, onUpdateRecord }) 
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
 
   const eduYears = record.demographics.educationYears || 0;
-  const mocaData = record.scales.mocaB || {};
+  const mocaData: SubjectRecord["scales"]["mocaB"] =
+    record.scales.mocaB || ({} as SubjectRecord["scales"]["mocaB"]);
 
   const hasMocaStarted = Boolean(
     record.scales.mocaB &&

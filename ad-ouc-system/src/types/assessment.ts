@@ -35,6 +35,14 @@ export interface SubjectRecord {
     phone2: string;
     wechat: string;
     caseSource: 1 | 2; // 1.社区 2.医院
+    // 以下字段为部分模块（如 PrintReportModal/MedicalRecordUploadModal）实际读取的扩展字段，
+    // 原类型未声明，开启严格检查后需补全以避免 "Property does not exist" 报错；
+    // 统一设为可选并放宽类型，保持与既有运行时行为一致。
+    marriage?: any;
+    livingStatus?: any;
+    educationLevel?: any;
+    informantRelation?: any;
+    cognitiveOnsetAge?: any;
   };
 
   // Section B: Past History
@@ -112,6 +120,10 @@ export interface SubjectRecord {
     };
     mriContraindications: boolean; // 支架/假牙等
     otherConditions?: string;
+    // OCR 解析回填时使用的扁平字段（与上方结构化子对象并存；history 已含 hypertension/diabetes/coronaryHeartDisease 嵌套对象，故此处不再重复声明）
+    chiefComplaint?: string;
+    stroke?: boolean;
+    familyHistory?: boolean;
   };
 
   // Section C: Personal History
@@ -152,6 +164,8 @@ export interface SubjectRecord {
     q7: number; // 商店买东西忘
     q8: number; // 比5年前差
     q9: number; // 东西放哪记不住
+    totalScore?: number; // 派生总分
+    answers?: any; // 部分模块写入的原始答题
   };
 
   // Section E: SCD Structured Interview
@@ -229,6 +243,8 @@ export interface SubjectRecord {
       onsetForm: 1 | 2 | 3; // 1突然 2不知道 3慢性
       progression: 1 | 2 | 3 | 4; // 1迅速 2不知道 3缓慢 4阶梯式
     };
+    // 部分前端模块通过 record.scdInterview.patientSCD 访问派生字段，原接口未声明
+    patientSCD?: any;
   };
 
   // Section F & G: History & Labs
@@ -253,12 +269,14 @@ export interface SubjectRecord {
       tasks: Record<string, { left: 0 | 1 | 2; right: 0 | 1 | 2 }>;
       calculatedScore?: number;
       result?: "左利手" | "双利手" | "右利手";
+      dominantHand?: any;
     };
 
     // H2: MMSE (30 items)
     mmse: {
       items: Record<string, number>; // 0 or 1 for items 2.1 - 2.30
       drawingImage?: string; // canvas drawings
+      totalScore?: number; // 部分模块写入的派生总分
     };
 
     // H3: AVLT-H (Auditory Verbal Learning)
@@ -274,6 +292,7 @@ export interface SubjectRecord {
         clothing: string[];
       };
       n7RecognitionErrors: number; // 24 items
+      delayedRecallScore?: number; // 派生总分
     };
 
     // H4: Verbal Fluency Test (VFT)
@@ -295,8 +314,13 @@ export interface SubjectRecord {
           cued?: boolean; // 语义提示后正确
           recognized?: boolean; // 选择提示正确
           userResponse?: string;
+          // 以下为部分模块（SectionLanguageNaming）实际写入的扩展字段
+          semanticCueCorrect?: boolean;
+          phonemicCueCorrect?: boolean;
+          recognitionChoice?: number;
         }
       >;
+      spontaneousScore?: number; // 派生总分
     };
 
     // H6: Shape Trailing Test (STT-A & STT-B)
@@ -331,6 +355,7 @@ export interface SubjectRecord {
       q5FingerMotorPraxis: number; // 0-20 (5 gestures, right/left)
       q6TappingGoNoGo: number; // 0-10
       q7LongDelay: number; // 0-10
+      score?: number; // 派生总分
     };
 
     // H9: FAQ Functional Activities Questionnaire
@@ -338,6 +363,7 @@ export interface SubjectRecord {
       informantPresent: boolean;
       informantRelation?: string;
       items: Record<number, number>; // 1-10: 0,1,2,3 or -1 for NA
+      totalScore?: number; // 派生总分
     };
 
     // H10: NPI Neuropsychiatric Inventory (12 items)
@@ -352,6 +378,7 @@ export interface SubjectRecord {
           distress?: number; // 0-5
         }
       >;
+      totalScore?: number; // 派生总分
     };
 
     // H11: Everyday Cognition (Ecog - 12 items)
@@ -395,6 +422,7 @@ export interface SubjectRecord {
       naming4Animals: number; // 0-4
       attentionDigitsWhite: number; // 0-1
       attentionDigitsBlack: number; // 0-2
+      totalScore?: number; // 派生总分
     };
 
     // H16: Vignettes
@@ -443,7 +471,13 @@ export interface SubjectRecord {
       community: 0 | 0.5 | 1 | 2 | 3;
       homeHobbies: 0 | 0.5 | 1 | 2 | 3;
       personalCare: 0 | 0.5 | 1 | 2 | 3;
+      cdrSb?: number; // 部分模块写入的派生总分
+      globalScore?: number; // 部分模块写入的全局分
     };
+    // 部分前端模块通过 record.scales.scdQ9 / record.scales.patientSCD 访问派生字段，
+    // 原 scales 接口未声明，严格检查下需补全（放宽类型以保持与运行时一致）。
+    scdQ9?: any;
+    patientSCD?: any;
   };
 
   // Section I: Biomarkers
@@ -470,6 +504,14 @@ export interface SubjectRecord {
       pTau217Value?: string;
       ratio?: string;
     };
+    // 以下为 OCR/部分模块使用的扩展字段（与上方结构化生物标志物并存）
+    mriHippocampus?: boolean;
+    mriAtrophy?: boolean;
+    mriDescription?: string;
+    apoeGenotype?: { tested: boolean; value?: string };
+    apoe4?: number;
+    amyloidStatus?: number; // 1异常 2正常 3未查
+    tauStatus?: number;
   };
 
   // Section J: Diagnosis
@@ -505,8 +547,8 @@ export type CognitiveDomain =
   | "moodSleep";
 
 export interface AssessmentSummaryResults {
-  scdQ9: { score: number; isPositive: boolean };
-  handedness: { score: number; result: "左利手" | "双利手" | "右利手" | "未评定"; leftSum?: number; rightSum?: number };
+  scdQ9: { score: number; isPositive: boolean; isAssessed: boolean };
+  handedness: { score: number; result: "左利手" | "双利手" | "右利手" | "未评定"; leftSum?: number; rightSum?: number; isAssessed: boolean };
   mmse: { score: number; cutoff: number; eduGroup: string; isAbnormal: boolean };
   mocaB: { score: number; cutoff: number; eduGroup: string; isAbnormal: boolean };
   avltH: {
@@ -526,6 +568,7 @@ export interface AssessmentSummaryResults {
     isDelayAbnormal: boolean;
     isN5Abnormal: boolean;
     isRecognitionAbnormal: boolean;
+    isAssessed: boolean;
   };
   logicalMemory: {
     immediate: number;
@@ -534,7 +577,7 @@ export interface AssessmentSummaryResults {
     cutoff: number;
     delayedCutoff: number;
     eduGroup: string;
-    isAbnormal: boolean;
+    isAbnormal: boolean; isAssessed: boolean;
     isDelayedAbnormal: boolean;
   };
   vft: {
@@ -543,7 +586,7 @@ export interface AssessmentSummaryResults {
     cutoff: number;
     eduGroup: string;
     group: string;
-    isAbnormal: boolean;
+    isAbnormal: boolean; isAssessed: boolean;
   };
   bnt: {
     spontaneousScore: number;
@@ -554,7 +597,7 @@ export interface AssessmentSummaryResults {
     cutoff: number;
     eduGroup: string;
     group: string;
-    isAbnormal: boolean;
+    isAbnormal: boolean; isAssessed: boolean;
   };
   stt: {
     sttATotal: number;
@@ -575,13 +618,13 @@ export interface AssessmentSummaryResults {
     total: number;
     cutoff: number;
     eduGroup: string;
-    isAbnormal: boolean;
+    isAbnormal: boolean; isAssessed: boolean;
   };
   faq: {
     sum: number;
     score: number;
     validCount: number;
-    isAbnormal: boolean;
+    isAbnormal: boolean; isAssessed: boolean;
     isMciPositive: boolean;
     isScdRange: boolean;
   };
@@ -593,27 +636,28 @@ export interface AssessmentSummaryResults {
     interpretation: string;
     isMciCutoff: boolean;
     isDementiaCutoff: boolean;
+    isAssessed: boolean;
   };
   gds15: {
     score: number;
     grade: string;
     level: "normal" | "mild" | "moderate" | "severe";
     isDepressed: boolean;
-    isAbnormal: boolean;
+    isAbnormal: boolean; isAssessed: boolean;
   };
   hamd17: {
     total: number;
     score: number;
     text: string;
     severity: string;
-    isAbnormal: boolean;
+    isAbnormal: boolean; isAssessed: boolean;
   };
   hama: {
     total: number;
     score: number;
     text: string;
     severity: string;
-    isAbnormal: boolean;
+    isAbnormal: boolean; isAssessed: boolean;
   };
   psqi: {
     compA: number;
@@ -627,24 +671,25 @@ export interface AssessmentSummaryResults {
     totalScore: number;
     efficiency: number;
     qualityText: string;
-    isAbnormal: boolean;
+    isAbnormal: boolean; isAssessed: boolean;
   };
   rbdsq: {
     score: number;
     isNormalCutoff: boolean;
     isPDCutoff: boolean;
-    isAbnormal: boolean;
+    isAbnormal: boolean; isAssessed: boolean;
   };
   ess: {
     score: number;
     level: string;
-    isAbnormal: boolean;
+    isAbnormal: boolean; isAssessed: boolean;
   };
   npi: {
     totalScore: number;
     distressScore: number;
     totalDistress: number;
     symptomCount: number;
+    isAssessed: boolean;
   };
 }
 

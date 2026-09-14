@@ -72,6 +72,7 @@ export const INTAKE_QUESTIONS: ScaleItem[] = [
     options: [
       { label: "男", score: 1 },
       { label: "女", score: 2 },
+      { label: "未知/不愿透露", score: 0 },
     ],
   },
   { id: "birth", q: "出生年份是哪一年？（如 1955）", kind: "number", min: 1920, max: 2010, hint: "1920~2010" },
@@ -87,6 +88,7 @@ export const INTAKE_QUESTIONS: ScaleItem[] = [
       { label: "未婚", score: 2 },
       { label: "离异", score: 3 },
       { label: "丧偶", score: 4 },
+      { label: "未知/不愿透露", score: 0 },
     ],
   },
   {
@@ -97,6 +99,8 @@ export const INTAKE_QUESTIONS: ScaleItem[] = [
       { label: "与家人同住", score: 2 },
       { label: "独居", score: 1 },
       { label: "养老机构", score: 3 },
+      { label: "其他", score: 0 },
+      { label: "未知/不愿透露", score: 0 },
     ],
   },
   { id: "phone", q: "联系电话（便于随访与科研归档）：", kind: "text", hint: "手机号码" },
@@ -342,7 +346,7 @@ export const SCALES_CONFIG: Record<string, ScaleDefinition> = {
     ],
     scoring: {
       type: "sum",
-      note: "MoCA-B 满分约 29（子测验和）；标准 cutoff 26",
+      note: "MoCA-B 满分 30（子测验和）；标准 cutoff 26",
       thresholds: [
         { min: 0, max: 17, level: "red", label: "认知受损提示（MoCA ≤17）" },
         { min: 18, max: 23, level: "yellow", label: "临界：需结合教育年限判断（18~23）" },
@@ -452,7 +456,7 @@ export const SCALES_CONFIG: Record<string, ScaleDefinition> = {
       thresholds: [
         { min: 0, max: 3, level: "green", label: "无明显神经精神症状（NPI ≤3）" },
         { min: 4, max: 12, level: "yellow", label: "存在轻中度症状，建议密切观察（NPI 4~12）" },
-        { min: 13, max: 99, level: "red", label: "精神行为症状较重（NPI ≥13），建议临床干预" },
+        { min: 13, max: 999, level: "red", label: "精神行为症状较重（NPI ≥13），建议临床干预" },
       ],
     },
   },

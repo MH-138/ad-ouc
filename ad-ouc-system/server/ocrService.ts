@@ -3,10 +3,13 @@
  * Implements the asynchronous PaddleOCR job lifecycle and clinical entity extraction
  */
 
+// [BUG-OCR-01] 原 TOKEN 硬编码在源码中（第二个泄露的敏感凭证，BUG-SECURITY-01 仅覆盖了 turso.ts）。
+// 现改为从环境变量读取；PaddleOCR 异步任务（提交→轮询→下载）当前未真正接入，
+// 故 JOB_URL/TOKEN/MODEL 仅作配置占位，实际解析逻辑见下方 parseDocumentWithOcr 的演示实现。
 export const PADDLE_OCR_CONFIG = {
-  JOB_URL: "https://paddleocr.aistudio-app.com/api/v2/ocr/jobs",
-  TOKEN: "3c0908da25250490257e66b5511fbd634d992fb5",
-  MODEL: "PaddleOCR-VL-1.6",
+  JOB_URL: process.env.PADDLE_OCR_JOB_URL || "https://paddleocr.aistudio-app.com/api/v2/ocr/jobs",
+  TOKEN: process.env.PADDLE_OCR_TOKEN || "", // 真实接入 PaddleOCR 时从 .env 读取，绝不硬编码
+  MODEL: process.env.PADDLE_OCR_MODEL || "PaddleOCR-VL-1.6",
   OPTIONAL_PAYLOAD: {
     useDocOrientationClassify: false,
     useDocUnwarping: false,
@@ -134,6 +137,7 @@ APOE 基因分型：ε3/ε4（携带 1 个 ε4 等位基因）。
 export async function parseDocumentWithOcr(sampleKey?: string, uploadedFileName?: string): Promise<{
   jobId: string;
   state: "done";
+  isDemo: boolean;
   sourceDocName: string;
   rawMarkdown: string;
   clinicalJson: ExtractedClinicalData;
@@ -141,9 +145,17 @@ export async function parseDocumentWithOcr(sampleKey?: string, uploadedFileName?
   const sample = SAMPLE_DOCUMENTS[sampleKey || "xuanwu_outpatient"] || SAMPLE_DOCUMENTS.xuanwu_outpatient;
   const jobId = `job_paddlevl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
+  // [BUG-OCR-01] 真实 PaddleOCR 异步任务尚未接入，当前 parseDocumentWithOcr 仅返回预设演示样本
+  // （默认孙桂兰门诊病历），与实际上传内容无关。明确标记 isDemo=true，使前端在回填前可提示"演示数据"，
+  // 避免医生误将固定假数据当作真实病历解析结果写入档案（P3 §9 亦要求医生确认后方可写入）。
+  console.warn(
+    "[OCR] parseDocumentWithOcr 当前返回预设演示数据（非真实解析结果）；真实 PaddleOCR 异步任务待实现。"
+  );
+
   return {
     jobId,
     state: "done",
+    isDemo: true,
     sourceDocName: uploadedFileName || sample.parsed.sourceDocName,
     rawMarkdown: sample.text,
     clinicalJson: {

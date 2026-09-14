@@ -1,19 +1,28 @@
 import { createClient, Client } from "@libsql/client";
 
-// Hardcoded default connection credentials as requested by user
-const DEFAULT_TURSO_URL = "libsql://ad-ouc-mh-138.aws-ap-northeast-1.turso.io";
-const DEFAULT_TURSO_TOKEN = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODg0MTU4NjUsImlkIjoiMDFhMDY1ZTQtMzUwMS03NWE1LThlMDEtOGZlODM1OWFlMzI0Iiwia2lkIjoiRzlQRzQ4TGlEaFdPVnJiMldheWZ3RGhBR3lpeDlvWHpkTmdHTmpRR2E4TSIsInJpZCI6IjIzNjU1ZjdjLWM1MWQtNDM1OC04NTE5LTQ1NWJmODUzMzJmOCJ9.VfAe_jo5NJuabb9lcrJmDhhY_1TTzwqlmDwhyzTbpqvFARiZ4_Ykuir9kRV0GwtTHUm0zVGuFHbfmvuqGyzMDw";
-
-const tursoUrl = process.env.TURSO_DATABASE_URL || DEFAULT_TURSO_URL;
-const tursoToken = process.env.TURSO_AUTH_TOKEN || DEFAULT_TURSO_TOKEN;
-
+// [BUG-SECURITY-01] 敏感凭证（数据库地址 / auth token）不再硬编码在源码中，
+// 一律从环境变量读取，避免提交到版本控制后泄露可直接连接数据库的凭证。
+// [BUG-OTHER-04] 原实现在此处顶层读取 process.env.TURSO_DATABASE_URL，
+// 但 ES module 的 import 早于 server.ts 中的 dotenv.config() 执行，
+// 导致 .env 配置永远不生效。改为惰性初始化：首次调用 getTursoClient() 时才读取环境变量，
+// 此时 dotenv 已加载完毕，.env 中的配置即可生效。
 let clientInstance: Client | null = null;
 
 export function getTursoClient(): Client {
   if (!clientInstance) {
+    const tursoUrl = process.env.TURSO_DATABASE_URL;
+    const tursoToken = process.env.TURSO_AUTH_TOKEN;
+
+    if (!tursoUrl) {
+      throw new Error(
+        "TURSO_DATABASE_URL 未配置：请在 ad-ouc-system/.env 中设置，或启动时内联环境变量，例如：" +
+          "TURSO_DATABASE_URL=\"file:./local-dev.db\" TURSO_AUTH_TOKEN=dummy npm run dev"
+      );
+    }
+
     clientInstance = createClient({
       url: tursoUrl,
-      authToken: tursoToken,
+      authToken: tursoToken, // 本地 file: 库可传 dummy；云端库需真实 token
     });
   }
   return clientInstance;
@@ -69,27 +78,81 @@ export async function initDatabase(): Promise<void> {
     )
   `);
 
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS drafts (
-      patient_id TEXT NOT NULL,
-      role TEXT NOT NULL,
-      flow_type TEXT,
-      flow_id TEXT NOT NULL DEFAULT 'default',
-      current_index INTEGER,
-      answers_json TEXT,
-      draft_json TEXT,
-      status TEXT,
-      client_updated_at TEXT,
-      PRIMARY KEY (patient_id, role, flow_id)
-    )
-  `);
-
+  // [BUG-API-01] drafts 表需使用三列联合主键 (patient_id, role, flow_id) 以支持多流程草稿隔离。
+  // 但 CREATE TABLE IF NOT EXISTS 不会迁移已存在的旧表（旧云端库仅 (patient_id, role) 两列主键，
+  // 导致同患者同角色新增第二份草稿时触发 UNIQUE 约束失败）。此处增加结构检测与惰性迁移：
+  //   1) 表不存在 → 直接建新结构；
+  //   2) 表已存在且含 flow_id 三列索引 → 无需处理；
+  //   3) 表已存在但仍是旧两列结构 → RENAME 旧表、建新表、迁移去重数据、DROP 旧表。
+  let draftsTableExists = false;
   try {
-    await db.execute("ALTER TABLE drafts ADD COLUMN draft_json TEXT");
-  } catch (error: any) {
-    if (!String(error?.message || error).includes("duplicate column")) {
-      console.warn("draft_json migration skipped:", error?.message || error);
+    await db.execute("SELECT 1 FROM drafts LIMIT 1");
+    draftsTableExists = true;
+  } catch (e) {
+    draftsTableExists = false;
+  }
+
+  if (draftsTableExists) {
+    let needsMigration = false;
+    try {
+      const idxRes: any = await db.execute("PRAGMA index_list(drafts)");
+      const idxRows = Array.isArray(idxRes.rows) ? (idxRes.rows as any[]) : [];
+      const hasThreeColIndex = idxRows.some((r: any) => /flow_id/.test(String(r.name)));
+      needsMigration = !hasThreeColIndex;
+    } catch (e) {
+      // PRAGMA 不可用时保守地不迁移，避免误删数据
+      needsMigration = false;
     }
+
+    if (needsMigration) {
+      console.warn("[migration] drafts 旧两列主键结构检测到，正在迁移为三列主键 (patient_id, role, flow_id)…");
+      await db.execute("ALTER TABLE drafts RENAME TO drafts_old");
+      await db.execute(`
+        CREATE TABLE drafts (
+          patient_id TEXT NOT NULL,
+          role TEXT NOT NULL,
+          flow_type TEXT,
+          flow_id TEXT NOT NULL DEFAULT 'default',
+          current_index INTEGER,
+          answers_json TEXT,
+          draft_json TEXT,
+          status TEXT,
+          client_updated_at TEXT,
+          PRIMARY KEY (patient_id, role, flow_id)
+        )
+      `);
+      try {
+        await db.execute(`
+          INSERT INTO drafts (patient_id, role, flow_type, flow_id, current_index, answers_json, draft_json, status, client_updated_at)
+          SELECT patient_id, role, flow_type, COALESCE(flow_id, 'default'), COALESCE(current_index, 0),
+                 COALESCE(answers_json, '{}'), COALESCE(draft_json, '{}'), COALESCE(status, 'in_progress'), client_updated_at
+          FROM drafts_old
+          ON CONFLICT(patient_id, role, flow_id) DO NOTHING
+        `);
+        await db.execute("DROP TABLE IF EXISTS drafts_old");
+        console.log("[migration] drafts 三列主键迁移完成。");
+      } catch (e: any) {
+        console.error("[migration] drafts 数据迁移失败，已回退为旧表结构：", e?.message || e);
+        // 迁移失败时重建旧表名，保证服务可启动（旧数据保留在 drafts_old）
+        await db.execute("ALTER TABLE drafts RENAME TO drafts_new");
+        await db.execute("ALTER TABLE drafts_old RENAME TO drafts");
+      }
+    }
+  } else {
+    await db.execute(`
+      CREATE TABLE drafts (
+        patient_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        flow_type TEXT,
+        flow_id TEXT NOT NULL DEFAULT 'default',
+        current_index INTEGER,
+        answers_json TEXT,
+        draft_json TEXT,
+        status TEXT,
+        client_updated_at TEXT,
+        PRIMARY KEY (patient_id, role, flow_id)
+      )
+    `);
   }
 
   try {
@@ -97,6 +160,39 @@ export async function initDatabase(): Promise<void> {
   } catch (error: any) {
     console.warn("drafts unique index creation skipped:", error?.message || error);
   }
+
+  // [BUG-DB-02] 补齐规范 (接口与数据表定义文档 §3(5)) 中声明但此前未落地的两张表结构，
+  // 使 OCR 解析来源、医生确认动作、AI 待审核消息可在后端完整追溯。
+  // 本批次仅建立表结构；应用层写入/读取接口在后续迭代接入。
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS documents (
+      id TEXT PRIMARY KEY,
+      patient_id TEXT NOT NULL,
+      uploaded_by_role TEXT,
+      source_doc_name TEXT,
+      raw_markdown TEXT,
+      clinical_json TEXT,
+      confirm_status TEXT NOT NULL DEFAULT 'pending',
+      confirmed_by TEXT,
+      confirmed_at TEXT,
+      created_at TEXT,
+      updated_at TEXT
+    )
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      patient_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      title TEXT,
+      body TEXT,
+      related_consultation_id TEXT,
+      is_read INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT,
+      updated_at TEXT
+    )
+  `);
 
   await db.execute(`
     CREATE TABLE IF NOT EXISTS ai_consultations (
@@ -131,7 +227,7 @@ export async function checkTursoHealth() {
 
     return {
       connected: true,
-      url: tursoUrl,
+      url: process.env.TURSO_DATABASE_URL || "(未配置)",
       latencyMs: latency,
       patientCount,
       assessmentCount,
@@ -140,7 +236,7 @@ export async function checkTursoHealth() {
   } catch (error: any) {
     return {
       connected: false,
-      url: tursoUrl,
+      url: process.env.TURSO_DATABASE_URL || "(未配置)",
       error: error?.message || String(error),
       timestamp: new Date().toISOString(),
     };
@@ -860,7 +956,7 @@ export async function cleanAndSeedStandardCohort() {
     summary: "受试者 李淑芬 (女, 68岁) 自评 SCD-Q9 评分为 6/9 分，主诉近 1 年半记忆力持续减退且有担忧情绪；知情者 FAQ 0分，日常生活完全独立，符合 Jessen 2014 标准主观认知下降早期特征。",
     reportText: "【宣武医院认知障碍多模态智能临床研判报告】\n受试者编号：SCD-2026-002   受试者姓名：李淑芬   性别：女   年龄：68岁   文化程度：9年\n一、临床综合分型研判：\n【主观认知下降 (Subjective Cognitive Decline, SCD 典型期)】\n推荐临床诊断编码：SCD (Category 1)    综合研判置信度：92%\n\n二、多维临床依据与自评特征：\n1. 主观记忆自评：SCD-Q9 自评分数 6/9 分，伴近事遗忘与明显担忧，符合 Jessen 等 SCD-plus 高危主诉标准。\n2. 心理与情绪自评：GDS-15 评分 4/15 分，处于轻度情绪波动范围；PSQI 睡眠障碍指数 5 分。\n\n三、专家处理与随访建议：\n1. 纳入宣武医院多中心 SCD 科研队列，建立 12 个月纵向追踪档案。\n2. 建议由主治医师完成客观神经心理量表测试（MMSE、MoCA-B）并签署电子签名。\n（本建议已实时推送至主治医师工作站待办队列，经医生电子签字后正式生效）",
     version: 1,
-    versionHistory: [],
+    versionHistory: [] as any[],
   };
 
   await db.execute({

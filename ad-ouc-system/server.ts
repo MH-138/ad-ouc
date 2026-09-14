@@ -21,6 +21,11 @@ import { parseDocumentWithOcr, SAMPLE_DOCUMENTS } from "./server/ocrService.ts";
 
 dotenv.config();
 
+// [BUG-AI-04] 原代码多处使用模型名 "gemini-3.7-flash"，该模型 ID 不存在，
+// 会导致"真实 AI 路径"恒为 500、所有 AI 能力实际都走降级。
+// 改为可配置的常量，默认使用稳定通用的 gemini-2.5-flash（真实可用 GA 模型）。
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+
 const app = express();
 const PORT = 3000;
 
@@ -195,9 +200,9 @@ app.post("/api/v1/reset-cohort", async (_req: Request, res: Response) => {
 
 // AI Clinical Diagnostic & Synthesis Analysis Endpoint
 app.post("/api/ai/analyze-assessment", async (req: Request, res: Response) => {
+  // 在 try 之外解构，确保 catch 降级分支仍可访问入参
+  const { patientData, assessmentSummary } = req.body;
   try {
-    const { patientData, assessmentSummary } = req.body;
-
     const ai = getGeminiClient();
     if (!ai) {
       // Return structured rule-based evaluation if API key is not configured
@@ -238,7 +243,7 @@ ${JSON.stringify(assessmentSummary?.scales || {}, null, 2)}
 `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: GEMINI_MODEL,
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -252,10 +257,14 @@ ${JSON.stringify(assessmentSummary?.scales || {}, null, 2)}
       analysis: parsed,
     });
   } catch (error: any) {
-    console.error("AI assessment analysis error:", error);
-    return res.status(500).json({
-      success: false,
-      error: error?.message || "AI 分析生成失败",
+    // [BUG-AI-01] 真实 Gemini Key 无效/缺失/网络异常时，本端点原先直接返回 500，
+    // 导致 AI 综合分析功能完全不可用。改为与 /api/ai/clinical-reasoning 一致的降级策略：
+    // 调用规则库生成结构化分析，并明确标记 isAiGenerated:false，保证前端永不崩溃。
+    console.error("AI assessment analysis error, falling back to rule-based analysis:", error?.message || error);
+    return res.json({
+      success: true,
+      isAiGenerated: false,
+      analysis: generateRuleBasedAnalysis(patientData, assessmentSummary),
     });
   }
 });
@@ -278,7 +287,7 @@ app.post("/api/ai/clinical-reasoning", async (req: Request, res: Response) => {
 
     const prompt = userPrompt || `请根据以下受试者档案输出标准临床研判意见，结构包括：一、临床分型结论；二、依据；三、处理与随访建议。\n${JSON.stringify(patientRecord)}`;
     const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: GEMINI_MODEL,
       contents: prompt,
     });
 
@@ -302,22 +311,36 @@ app.post("/api/ai/clinical-reasoning", async (req: Request, res: Response) => {
 function generateRuleBasedAnalysis(patientData: any, summary: any) {
   const age = patientData?.demographics?.age || 65;
   const edu = patientData?.demographics?.educationYears || 12;
-  const mmse = summary?.scales?.mmse?.score ?? 28;
-  const moca = summary?.scales?.mocaB?.score ?? 25;
+  // [BUG-AI-03] 缺失量表不再用 ?? 28 / ?? 25 / ?? 0 当作"正常/满分"默认值
+  // （这会像 BUG-EXPORT-02 的反面一样，把"未评估"伪装成"有结论"）。统一为 null，
+  // 缺数据时不参与分型，并在结论中明确标注"数据不足"。
+  const mmse = summary?.scales?.mmse?.score ?? null;
+  const moca = summary?.scales?.mocaB?.score ?? null;
   const scdScore = summary?.scdQ9Score ?? 0;
-  const cdr = summary?.scales?.cdr?.globalCDR ?? 0;
+  const cdr = summary?.scales?.cdr?.globalCDR ?? null;
+
+  const mmseMissing = mmse === null;
+  const mocaMissing = moca === null;
+  const cdrMissing = cdr === null;
 
   let diag = "NC (正常健康对照)";
-  if (scdScore >= 5 && mmse >= 27 && moca >= 24 && cdr === 0) {
-    diag = "SCD (主观认知下降/AD临床前期)";
-  } else if (cdr === 0.5 || moca < 22 || mmse < 24) {
-    diag = "aMCI (遗忘型轻度认知障碍)";
-  } else if (cdr >= 1 || mmse < 20) {
-    diag = "AD (阿尔茨海默病痴呆期)";
+  // 仅当 MMSE / MoCA / CDR 三项均有数据时，才进行客观分型，避免缺项被误判
+  if (!mmseMissing && !mocaMissing && !cdrMissing) {
+    if (scdScore >= 5 && mmse >= 27 && moca >= 24 && cdr === 0) {
+      diag = "SCD (主观认知下降/AD临床前期)";
+    } else if (cdr === 0.5 || moca < 22 || mmse < 24) {
+      diag = "aMCI (遗忘型轻度认知障碍)";
+    } else if (cdr >= 1 || mmse < 20) {
+      diag = "AD (阿尔茨海默病痴呆期)";
+    }
+  } else {
+    diag = "数据不足（部分核心量表未评估，暂不给出确定性临床分型）";
   }
 
+  const fmt = (v: number | null, suffix = "") => (v === null ? "未评估" : `${v}${suffix}`);
+
   return {
-    overallImpression: `受试者年龄 ${age} 岁，受教育年限 ${edu} 年。主观认知自评 SCD-Q9 为 ${scdScore} 分，MMSE 得分 ${mmse} 分，MoCA-B 得分 ${moca} 分，Global CDR 为 ${cdr}。整体认知功能符合 ${diag} 的临床特征谱。`,
+    overallImpression: `受试者年龄 ${age} 岁，受教育年限 ${edu} 年。主观认知自评 SCD-Q9 为 ${scdScore} 分，MMSE ${fmt(mmse, " 分")}，MoCA-B ${fmt(moca, " 分")}，Global CDR ${fmt(cdr)}。整体认知功能符合 ${diag} 的临床特征谱。`,
     domainAssessment: {
       episodicMemory: scdScore >= 4 ? "轻度主观下降，客观延时回忆轻度波动" : "基本正常",
       executiveFunction: "基本在同年龄常模范围内",
@@ -329,8 +352,14 @@ function generateRuleBasedAnalysis(patientData: any, summary: any) {
     suggestedDiagnosis: diag,
     keyAbnormalities: [
       scdScore >= 5 ? `SCD-Q9 主诉显著 (得分: ${scdScore}分)` : "无明显认知主诉",
-      cdr > 0 ? `CDR评级异常 (Global CDR: ${cdr})` : "CDR为0 (无功能性痴呆)",
-    ],
+      cdrMissing
+        ? "CDR 未评估"
+        : cdr! > 0
+        ? `CDR评级异常 (Global CDR: ${cdr})`
+        : "CDR为0 (无功能性痴呆)",
+      mmseMissing ? "MMSE 未评估" : "",
+      mocaMissing ? "MoCA-B 未评估" : "",
+    ].filter(Boolean),
     recommendations: [
       "建议每 6-12 个月进行一次神经心理量表标准化纵向随访，监测认知轨迹",
       "结合头颅 MRI 高分辨率海马体积测量及必要时行 Aβ-PET / 血浆 p-tau217 检测",
@@ -500,7 +529,7 @@ app.post("/api/ai/parse-medical-record", async (req: Request, res: Response) => 
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: GEMINI_MODEL,
       contents,
       config: {
         responseMimeType: "application/json",
@@ -552,7 +581,7 @@ app.post("/api/ai/analyze-drawing", async (req: Request, res: Response) => {
 
     const cleanBase64 = drawingBase64.replace(/^data:[^;]+;base64,/, "");
     const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: GEMINI_MODEL,
       contents: [
         {
           inlineData: {
@@ -583,36 +612,20 @@ app.post("/api/ai/analyze-drawing", async (req: Request, res: Response) => {
   }
 });
 
-function generateDrawingScoreFallback(type: string, title?: string) {
-  if (type === "dualPentagons" || (title && title.includes("五边形"))) {
-    return {
-      score: 1,
-      maxScore: 1,
-      status: "normal",
-      clinicalComment: "双五边形闭合完整，交叉形成规则四边形交集，得 1/1 分（视空间结构正常）。",
-    };
-  }
-  if (type === "circle" || type === "clock" || (title && (title.includes("钟") || title.includes("CDT")))) {
-    return {
-      score: 4,
-      maxScore: 4,
-      status: "normal",
-      clinicalComment: "CDT钟表描画测验：表盘圆整，1-12数字分布对称完整，时针与分针指向清晰准确，得 4/4 分（正常）。",
-    };
-  }
-  if (type === "cube" || (title && title.includes("立方体"))) {
-    return {
-      score: 1,
-      maxScore: 1,
-      status: "normal",
-      clinicalComment: "立方体三维空间结构轮廓完整，各平行边与透视交角符合临床常模，得 1/1 分。",
-    };
-  }
+function generateDrawingScoreFallback(
+  type: string,
+  title?: string
+): { score: number | null; maxScore: number; status: string; clinicalComment: string } {
+  // [BUG-AI-02] 本兜底仅在"无真实绘图图像"或"AI 服务不可用"时调用。
+  // 原先无论何种类型都返回满分 + status:"normal"，等于把"未做测验/网络异常"伪装成"视空间结构正常"，
+  // 与 BUG-SCALE-03（空 MoCA-B 显示 23 分）同源，会误导医生。
+  // 现统一返回 score:null + status:"untested" + "未测评"说明，不套用任何阈值。
+  const maxScore = type === "circle" || type === "clock" || (title && (title.includes("钟") || title.includes("CDT"))) ? 4 : 1;
   return {
-    score: 1,
-    maxScore: 1,
-    status: "normal",
-    clinicalComment: "绘图线条平稳连续，几何对称性良好，未见失用、半侧空间忽视或震颤征象，评定合格。",
+    score: null,
+    maxScore,
+    status: "untested",
+    clinicalComment: "未上传绘图图像或 AI 服务不可用，本项未测评，不计入视空间功能判定。",
   };
 }
 
@@ -674,20 +687,24 @@ function parseMedicalRecordFallback(text: string) {
 async function startServer() {
   try {
     await initDatabase();
-    // Auto-clean any corrupt / garbled legacy records and ensure the standard 4-patient cohort is loaded
+    // [BUG-DB-01] 原先每次启动都按"非标准队列/脏数据"启发式自动清库重播种，
+    // 多人共用共享云库时一方启动即清空他人数据（数据丢失风险）。
+    // 现改为：仅当显式设置 SEED_ON_BOOT=true 时才清库重播种；
+    // 否则仅当 patients 表完全为空（首次运行）才自动播种；已有业务数据一律跳过。
     const currentPatients = await getAllPatients();
-    const hasCorruptData = currentPatients.some(
-      (p: any) =>
-        !p.name ||
-        !p.name.trim() ||
-        p.name.includes("\uFFFD") ||
-        p.name === "受试者 4" ||
-        p.id === "sub-1789013609015"
-    );
-    const hasLiShufen = currentPatients.some((p: any) => p.name === "李淑芬");
-    if (hasCorruptData || !hasLiShufen || currentPatients.length < 4) {
-      console.log("Database contains corrupted records or missing standard cohort. Cleaning and resetting database...");
+    const seedOnBoot = process.env.SEED_ON_BOOT === "true";
+    const isEmpty = currentPatients.length === 0;
+
+    if (seedOnBoot) {
+      console.log("[DB] SEED_ON_BOOT=true：即将清空并重置为标准 4 位受试者队列…");
       await cleanAndSeedStandardCohort();
+    } else if (isEmpty) {
+      console.log("[DB] patients 表为空，自动播种标准 4 位受试者队列。");
+      await cleanAndSeedStandardCohort();
+    } else {
+      console.log(
+        `[DB] 检测到已有 ${currentPatients.length} 位受试者数据，跳过自动播种（如需重置请设置 SEED_ON_BOOT=true 或调用 POST /api/v1/reset-cohort）。`
+      );
     }
   } catch (err) {
     console.error("Failed to initialize Turso database on boot:", err);

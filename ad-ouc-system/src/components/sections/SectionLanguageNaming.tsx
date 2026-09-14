@@ -23,9 +23,9 @@ export const SectionLanguageNaming: React.FC<Props> = ({ record, onChange, onOpe
     itemNo: number,
     state: { spontaneous?: boolean; semanticCueCorrect?: boolean; phonemicCueCorrect?: boolean; recognitionChoice?: number }
   ) => {
-    const bntItems = record.scales?.bnt?.items || {};
-    const current = bntItems[itemNo] || {};
     const currentBnt = record.scales?.bnt || { items: {} };
+    const current =
+      currentBnt.items?.[itemNo] ?? ({} as SubjectRecord["scales"]["bnt"]["items"][number]);
     onChange({
       scales: {
         ...record.scales,

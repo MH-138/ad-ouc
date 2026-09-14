@@ -24,7 +24,7 @@ export const SectionSCDSubjective: React.FC<Props> = ({ record, onChange }) => {
   };
 
   const updateVignettes = (patch: Partial<SubjectRecord["scales"]["vignettes"]>) => {
-    const current = record.scales?.vignettes || {};
+    const current = record.scales?.vignettes ?? ({} as SubjectRecord["scales"]["vignettes"]);
     onChange({
       scales: {
         ...record.scales,

@@ -43,6 +43,7 @@ interface ChatInterviewViewProps {
   onOpenPrintModal: () => void;
   onSwitchToWorkbench: () => void;
   role?: RoleType;
+  onChangeRole?: (role: RoleType) => void;
 }
 
 interface MessageHistoryItem {

@@ -25,7 +25,11 @@
         <option value="informant">家属（知情者）</option>
       </select>
       <span id="saveStatus" class="save-status" aria-live="polite">已保存</span>
+      <span id="cloudStatus" class="cloud-status" aria-live="polite"></span>
       <span id="offlineDot" class="offline">● 在线</span>
+      <span id="userBadge" class="rolebadge" hidden></span>
+      <button id="acctBtn" class="iconbtn" title="账号管理" aria-label="账号管理">⚙</button>
+      <button id="logoutBtn" class="iconbtn" title="退出登录" aria-label="退出登录">⏻</button>
     </div>
   </header>
 
@@ -45,7 +49,26 @@
   <input id="patientFileInput" class="visually-hidden" type="file"
     accept=".csv,.tsv,.xls,text/csv,text/tab-separated-values,application/vnd.ms-excel" />
 
+  <!-- 登录遮罩（演示级，纯前端校验，不联网） -->
+  <div id="loginOverlay" class="login-overlay">
+    <div class="login-box">
+      <div class="login-brand"><span aria-hidden="true">脑</span> 认知筛查 · 临床数据采集</div>
+      <div class="login-sub">演示系统 · 请登录后进入工作台</div>
+      <select id="loginRole" class="login-input login-role" title="登录身份">
+        <option value="rater">主试（医生）</option>
+        <option value="self">受试者（自评）</option>
+        <option value="informant">家属（知情者）</option>
+      </select>
+      <input id="loginUser" class="login-input" type="text" placeholder="用户名（演示：admin）" autocomplete="username" />
+      <input id="loginPwd" class="login-input" type="password" placeholder="密码（演示：123456）" autocomplete="current-password" />
+      <button id="loginBtn" class="login-btn" type="button">进入系统</button>
+      <div class="login-hint">演示账号 admin / 123456（本地校验，不联网、不加密）</div>
+    </div>
+  </div>
+
+  <script>window.API_BASE = "http://localhost:8000";</script>
   <script src="scales.js"></script>
+  <script src="api.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

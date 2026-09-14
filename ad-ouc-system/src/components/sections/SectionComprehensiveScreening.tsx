@@ -17,7 +17,10 @@ interface Props {
 export const SectionComprehensiveScreening: React.FC<Props> = ({ record, onChange }) => {
   const eduYears = record.demographics?.educationYears || 0;
   const mmseResult = calculateMMSE(record.scales?.mmse?.items || {}, eduYears);
-  const mocaResult = calculateMoCAB(record.scales?.mocaB || {}, eduYears);
+  const mocaResult = calculateMoCAB(
+    record.scales?.mocaB ?? ({} as SubjectRecord["scales"]["mocaB"]),
+    eduYears,
+  );
   const handednessResult = calculateHandedness(record.scales?.handedness?.tasks || {});
 
   const updateMMSEItem = (key: string, val: number) => {
@@ -34,7 +37,7 @@ export const SectionComprehensiveScreening: React.FC<Props> = ({ record, onChang
   };
 
   const updateMoCABField = (field: keyof SubjectRecord["scales"]["mocaB"], val: number) => {
-    const current = record.scales?.mocaB || {};
+    const current = record.scales?.mocaB ?? ({} as SubjectRecord["scales"]["mocaB"]);
     onChange({
       scales: {
         ...record.scales,

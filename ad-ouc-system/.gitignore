@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# 本地离线开发数据库文件（由 .env 中 file:./local-dev.db 生成）
+local-dev.db
+*.db
+*.db-journal

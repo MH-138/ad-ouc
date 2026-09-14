@@ -5,17 +5,20 @@ import { SectionLanguageNaming } from "../components/sections/SectionLanguageNam
 interface LanguageNamingPageProps {
   record: SubjectRecord;
   onUpdateRecord: (record: SubjectRecord) => void;
+  onOpenTimerCenter: () => void;
 }
 
 export const LanguageNamingPage: React.FC<LanguageNamingPageProps> = ({
   record,
   onUpdateRecord,
+  onOpenTimerCenter,
 }) => {
   return (
     <div className="space-y-6">
       <SectionLanguageNaming
         record={record}
         onChange={(updated) => onUpdateRecord({ ...record, ...updated })}
+        onOpenTimerCenter={onOpenTimerCenter}
       />
     </div>
   );

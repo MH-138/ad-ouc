@@ -48,6 +48,8 @@ interface AppLayoutProps {
   pendingAiCount?: number;
   onExportExcel: () => void;
   onNewRecord: () => void;
+  anonymizeExport: boolean;
+  onToggleAnonymizeExport: () => void;
   children: React.ReactNode;
 }
 
@@ -153,6 +155,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   pendingAiCount = 0,
   onExportExcel,
   onNewRecord,
+  anonymizeExport,
+  onToggleAnonymizeExport,
   children,
 }) => {
   const [systemDropdownOpen, setSystemDropdownOpen] = useState(false);
@@ -396,6 +400,20 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 <span className="hidden sm:inline">上传病历/化验单(OCR)</span>
                 <span className="sm:hidden">病历化验单</span>
               </button>
+
+              {/* BUG-EXPORT-03: 匿名化导出开关——勾选后所有 Excel 导出脱敏姓名/身份证/电话 */}
+              <label
+                className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100/90 border border-slate-200 text-xs font-semibold text-slate-700 cursor-pointer hover:bg-slate-200/90 transition"
+                title="勾选后所有 Excel 导出将脱敏姓名、身份证号与手机号，满足科研隐私合规"
+              >
+                <input
+                  type="checkbox"
+                  checked={anonymizeExport}
+                  onChange={onToggleAnonymizeExport}
+                  className="h-3.5 w-3.5 rounded border-slate-400 text-teal-600 focus:ring-teal-500"
+                />
+                <span>脱敏导出</span>
+              </label>
 
               {/* 4. Doctor Station Badge */}
               <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-xs font-bold">

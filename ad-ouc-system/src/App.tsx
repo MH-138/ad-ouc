@@ -82,6 +82,8 @@ export default function App() {
 
   // 4. Global Modals State
   const [isTimerModalOpen, setIsTimerModalOpen] = useState(false);
+  // BUG-EXPORT-03: 全局"匿名化导出"开关——勾选后所有 Excel 导出均脱敏姓名/身份证/电话
+  const [anonymizeExport, setAnonymizeExport] = useState(false);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -384,7 +386,7 @@ export default function App() {
             }}
             onExportExcel={(rec) => {
               const target = rec || activeRecord;
-              if (target) exportRecordToExcel(target);
+              if (target) exportRecordToExcel(target, { anonymize: anonymizeExport });
             }}
             onNavigate={setActivePage}
           />
@@ -436,6 +438,7 @@ export default function App() {
           <AvltMemoryPage
             record={activeRecord!}
             onUpdateRecord={handleUpdateRecord}
+            onOpenTimerCenter={() => setIsTimerModalOpen(true)}
           />
         );
       case "language_naming":
@@ -443,6 +446,7 @@ export default function App() {
           <LanguageNamingPage
             record={activeRecord!}
             onUpdateRecord={handleUpdateRecord}
+            onOpenTimerCenter={() => setIsTimerModalOpen(true)}
           />
         );
       case "executive_stt":
@@ -495,7 +499,7 @@ export default function App() {
             onOpenAiModal={() => setIsAiModalOpen(true)}
             onOpenPrintModal={() => setIsPrintModalOpen(true)}
             onExportExcel={() => {
-              if (activeRecord) exportRecordToExcel(activeRecord);
+              if (activeRecord) exportRecordToExcel(activeRecord, { anonymize: anonymizeExport });
             }}
           />
         );
@@ -507,7 +511,7 @@ export default function App() {
           />
         );
       case "clinical_guide":
-        return <GuidePage onNavigate={setActivePage} />;
+        return <GuidePage onNavigate={(page: string) => setActivePage(page as unknown as AppPageId)} />;
       default:
         return (
           <PatientCenterPage
@@ -527,7 +531,7 @@ export default function App() {
             }}
             onExportExcel={(rec) => {
               const target = rec || activeRecord;
-              if (target) exportRecordToExcel(target);
+              if (target) exportRecordToExcel(target, { anonymize: anonymizeExport });
             }}
             onNavigate={setActivePage}
           />
@@ -581,9 +585,11 @@ export default function App() {
       onOpenApprovalModal={() => setIsApprovalModalOpen(true)}
       pendingAiCount={pendingAiConsultations.length}
       onExportExcel={() => {
-        if (activeRecord) exportRecordToExcel(activeRecord);
+        if (activeRecord) exportRecordToExcel(activeRecord, { anonymize: anonymizeExport });
       }}
       onNewRecord={handleNewPatient}
+      anonymizeExport={anonymizeExport}
+      onToggleAnonymizeExport={() => setAnonymizeExport((v) => !v)}
     >
       {renderExaminerPage()}
 
@@ -646,7 +652,7 @@ export default function App() {
                 ...activeRecord,
                 diagnosis: {
                   ...activeRecord.diagnosis,
-                  category: category !== undefined ? category : (activeRecord.diagnosis?.category ?? 1),
+                  category: (category !== undefined ? category : (activeRecord.diagnosis?.category ?? 1)) as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9,
                   notes,
                   approvalStatus: "pending",
                 },

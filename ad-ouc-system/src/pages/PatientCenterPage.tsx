@@ -241,7 +241,7 @@ export const PatientCenterPage: React.FC<PatientCenterPageProps> = ({
           {filteredCohort.map((p) => {
             const isSelected = Boolean(currentRecord && p.id === currentRecord.id);
             const hasMmse = Boolean(p.scales?.mmse?.items && Object.keys(p.scales.mmse.items).length > 0);
-            const hasMoca = Boolean(p.scales?.mocaB?.fluencyWords && p.scales.mocaB.fluencyWords.length > 0);
+            const hasMoca = Boolean(p.scales?.mocaB?.fluencyFruit && p.scales.mocaB.fluencyFruit > 0);
             const hasAvlt = Boolean(p.scales?.avltH?.n1Words && p.scales.avltH.n1Words.length > 0);
             const hasCdr = Boolean(
               p.scales?.cdr &&

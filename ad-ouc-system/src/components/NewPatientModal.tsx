@@ -101,6 +101,7 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
 
   // Random generate complete valid subject with ID card
   const handleRandomGeneratePatient = () => {
+    setErrorMsg(""); // BUG-INTAKE-04: 清除旧的身份证格式等错误提示，避免与随机生成成功横幅并存
     const pick = RANDOM_POOLS[Math.floor(Math.random() * RANDOM_POOLS.length)];
     const seq = Math.floor(10 + Math.random() * 89);
     const genderBit = pick.gender === 1 ? "1" : "2";
@@ -140,6 +141,7 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
     },
     sourceLabel: string
   ) => {
+    setErrorMsg(""); // BUG-INTAKE-04: 成功回填前清除旧错误提示，避免与回填成功提示并存
     setName(data.name);
     if (data.idCard) setIdCard(data.idCard);
     setGender(data.gender);
@@ -366,7 +368,7 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
           height: parsedHeight || 165,
           weight: parsedWeight || 60,
           educationYears: parsedEdu,
-          maritalStatus,
+          maritalStatus: maritalStatus as 1 | 2 | 3 | 4 | 5,
           socialSupport: {
             ...baseRecord.demographics.socialSupport,
             livingAlone: livingStatus === 1 ? 1 : 2,

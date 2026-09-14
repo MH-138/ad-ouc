@@ -21,7 +21,7 @@ export const SectionMemoryBattery: React.FC<Props> = ({ record, onChange, onOpen
     trial: "n1Words" | "n2Words" | "n3Words" | "n4Delayed5MinWords" | "n5Delayed20MinWords",
     word: string
   ) => {
-    const currentAvlt = record.scales?.avltH || ({} as any);
+    const currentAvlt = record.scales?.avltH ?? ({} as SubjectRecord["scales"]["avltH"]);
     const list = currentAvlt[trial] || [];
     const nextList = list.includes(word) ? list.filter((w) => w !== word) : [...list, word];
     onChange({

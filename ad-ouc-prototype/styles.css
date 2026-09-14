@@ -86,6 +86,24 @@ body { display: flex; flex-direction: column; height: 100vh; }
   padding: 14px 18px; border-radius: 14px 14px 0 0; border-bottom: 2px solid #2f6fd0;
 }
 .rep-close { border: none; background: #eef2f8; color: #5a6b80; font-size: 16px; border-radius: 8px; padding: 4px 10px; cursor: pointer; }
+.rep-cloud { border: 1px solid #2f6fd0; background: #fff; color: #2f6fd0; font-size: 13px; font-weight: 700; border-radius: 8px; padding: 5px 12px; cursor: pointer; margin-left: auto; }
+.rep-cloud:hover { background: #eaf2ff; }
+.rep-print { border: 1px solid #2f6fd0; background: #fff; color: #2f6fd0; font-size: 13px; font-weight: 700; border-radius: 8px; padding: 5px 12px; cursor: pointer; margin-left: 8px; }
+.rep-print:hover { background: #eaf2ff; }
+
+/* 数据看板（医师首页统计卡片） */
+.dash { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow-sm); }
+.dash-title { font-size: 14px; font-weight: 800; color: var(--blue); margin-bottom: 10px; }
+.dash-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.dash-card { border-radius: 10px; padding: 10px 4px; text-align: center; background: #f1f6fd; border: 1px solid #d8e4f4; }
+.dash-card.red { background: #fdeaea; border-color: #f3bcbc; }
+.dash-card.yellow { background: #fff8e1; border-color: #f3e0a6; }
+.dash-card.green { background: #e7f7ec; border-color: #b6e3c6; }
+.dash-n { font-size: 24px; font-weight: 800; color: var(--ink); line-height: 1.1; }
+.dash-card.red .dash-n { color: #c0392b; }
+.dash-card.yellow .dash-n { color: #b58900; }
+.dash-card.green .dash-n { color: #1e8e4f; }
+.dash-l { font-size: 12px; color: var(--muted); margin-top: 3px; }
 .rep-body { background: #fff; border-radius: 0 0 14px 14px; padding: 16px 18px 20px; overflow-y: auto; }
 .rep-p { font-size: 14px; color: #1a1a1a; margin-bottom: 12px; }
 .rep-list { display: flex; flex-direction: column; gap: 8px; }
@@ -282,9 +300,13 @@ body { min-width: 320px; }
 }
 .role { min-height: 38px; border: 1px solid #cbd8e9; font-size: 15px; }
 .rolebadge { border-radius: 8px; padding: 6px 9px; color: #f7c873; font-size: 13px; }
-.save-status, .offline { font-size: 12px; white-space: nowrap; }
+.save-status, .offline, .cloud-status { font-size: 12px; white-space: nowrap; }
 .save-status { color: #b9c7dc; }
 .save-status.saved { color: #94ddb7; }
+.cloud-status { color: #8fa6c4; }
+.cloud-status.syncing { color: #ffd166; }
+.cloud-status.synced { color: #94ddb7; }
+.cloud-status.error { color: #ff8a8a; }
 
 .home {
   width: min(100%, 760px); margin: 0 auto; padding: clamp(24px, 5vw, 54px) clamp(16px, 4vw, 34px) 48px;
@@ -414,7 +436,66 @@ body { min-width: 320px; }
   .bubble { max-width: 86%; }
   .current-row .bubble.current { max-width: 96%; padding: 21px 20px; font-size: 29px; }
   .current-row .bubble.current::after { font-size: 13px; }
+  .dash-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* 打印 / 导出 PDF：仅输出报告或患者列表浮层 */
+@media print {
+  #topbar, #home, #chatWrap, #patientFileInput { display: none !important; }
+  html, body { display: block; height: auto; background: #fff; }
+  .report-overlay {
+    position: static !important; display: flex !important; flex-direction: column;
+    inset: auto; background: #fff !important; padding: 0 !important; backdrop-filter: none !important;
+  }
+  .rep-hd { border-radius: 0 !important; }
+  .rep-body { border-radius: 0 !important; overflow: visible !important; max-height: none !important; box-shadow: none !important; }
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  #loginOverlay { display: none !important; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+
+/* ---------- 登录遮罩（演示级，纯前端） ---------- */
+.login-overlay {
+  position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #1f3a5f 0%, #2c5282 100%);
+}
+.login-box {
+  width: min(360px, 90vw); background: var(--surface, #fff); border-radius: 16px;
+  padding: 26px 22px; box-shadow: 0 20px 60px rgba(0,0,0,.35); text-align: center;
+}
+.login-brand { font-size: 18px; font-weight: 800; color: var(--blue, #2c5282); margin-bottom: 4px; }
+.login-brand span { display: inline-block; background: var(--blue, #2c5282); color: #fff; border-radius: 8px; padding: 0 8px; margin-right: 4px; }
+.login-sub { font-size: 13px; color: var(--muted, #6b7280); margin-bottom: 18px; }
+.login-input {
+  display: block; width: 100%; box-sizing: border-box; margin: 10px 0; padding: 11px 12px;
+  border: 1px solid var(--line, #d8e4f4); border-radius: 10px; font-size: 15px; background: #f7faff;
+}
+.login-input:focus { outline: none; border-color: var(--blue, #2c5282); box-shadow: 0 0 0 3px rgba(44,82,130,.15); }
+.login-btn {
+  width: 100%; margin-top: 8px; padding: 12px; border: none; border-radius: 10px; cursor: pointer;
+  font-size: 16px; font-weight: 700; color: #fff; background: var(--blue, #2c5282);
+}
+.login-btn:hover { background: #234471; }
+.login-hint { margin-top: 12px; font-size: 12px; color: var(--muted, #6b7280); }
+
+/* ---------- 顶栏用户徽标 ---------- */
+#userBadge { font-size: 13px; color: #e2e8f0; background: rgba(255,255,255,.12); border-radius: 8px; padding: 6px 9px; }
+
+/* ---------- 看板备注 ---------- */
+.dash-note { margin-top: 10px; font-size: 12px; color: var(--muted, #6b7280); line-height: 1.5; }
+
+/* ---------- 操作日志 ---------- */
+.log-list { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow: auto; }
+.log-item {
+  display: grid; grid-template-columns: 120px 84px 1fr; gap: 8px; align-items: baseline;
+  padding: 8px 10px; border-radius: 8px; background: #f6f9fd; border: 1px solid #e4edf7; font-size: 13px;
+}
+.log-time { color: var(--muted, #6b7280); font-variant-numeric: tabular-nums; }
+.log-action { color: var(--blue, #2c5282); font-weight: 700; }
+.log-detail { color: var(--ink, #1f2937); word-break: break-all; }
+
+@media (max-width: 620px) {
+  .log-item { grid-template-columns: 92px 72px 1fr; font-size: 12px; }
 }

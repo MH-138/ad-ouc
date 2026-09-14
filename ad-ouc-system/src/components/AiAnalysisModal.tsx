@@ -17,6 +17,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { tursoApi } from "../services/tursoApi";
+import { calculateMoCAB } from "../utils/scoringCalculators";
 
 interface Props {
   isOpen: boolean;
@@ -50,17 +51,17 @@ export function generateDynamicScenarios(record: SubjectRecord): MockClinicalSce
   const edu = record.demographics?.educationYears || 12;
   const mmseScore = sumNumericValues(record.scales.mmse?.items) || 27;
   const moca = record.scales.mocaB;
-  const mocaScore =
-    (moca?.executiveTrail || 0) +
-    (moca?.fluencyFruit || 0) +
-    (moca?.orientation || 0) +
-    (moca?.calculation13Yuan || 0) +
-    (moca?.abstraction || 0) +
-    (moca?.delayedRecall || 0) +
-    (moca?.visualPerception10Obj || 0) +
-    (moca?.naming4Animals || 0) +
-    (moca?.attentionDigitsWhite || 0) +
-    (moca?.attentionDigitsBlack || 0) || 23;
+  // BUG-SCALE-03: 统一使用 scoringCalculators.calculateMoCAB，移除内联求和与 `|| 23` 兜底。
+  // 未作答（所有子项均为空/0）时记为 null，避免空白患者被伪造为正常分数误导医生。
+  const mocaAnyFilled = moca && Object.values(moca).some((v) => v != null && Number(v) !== 0);
+  const mocaScore = mocaAnyFilled ? calculateMoCAB(moca, edu).score : null;
+  // 报告文案中的 MoCA 展示：未评估时显式标注，避免被 Math.max/min 拉成正常分。
+  const mocaStr = (bound: number, mode: "min" | "max") =>
+    mocaScore === null
+      ? "未评估"
+      : mode === "max"
+      ? String(Math.max(mocaScore, bound))
+      : String(Math.min(mocaScore, bound));
   const scdScore = sumNumericValues(record.scdQ9 as unknown as Record<string, unknown>) || 6;
   const cdrScore = Math.max(...Object.values(record.scales.cdr || {}).map((val) => Number(val || 0)), 0) || 0.5;
   const id = record.subjectNo || record.id || "01-8962";
@@ -82,10 +83,10 @@ export function generateDynamicScenarios(record: SubjectRecord): MockClinicalSce
       categoryLabel: "主观认知下降 (SCD 极早期)",
       title: `${name} - 典型主观认知下降阶段 (SCD, 符合 NIA-AA 临床早期特征)`,
       confidence: randomConfidence(0.93),
-      summary: `受试者 ${name} (${gender}, ${age}岁) 自评 SCD-Q9 评分为 ${scdScore}/9 分，主诉近 1 年半记忆力持续减退且明显担忧；全套客观神经心理量表 MMSE ${Math.max(mmseScore, 26)}/30、MoCA-B ${Math.max(mocaScore, 24)}/30，均处于同年龄常模界值之上；全球 CDR=0 分，知情者 FAQ=0 分，日常生活完全独立，符合 Jessen 2014 标准主观认知下降。`,
+      summary: `受试者 ${name} (${gender}, ${age}岁) 自评 SCD-Q9 评分为 ${scdScore}/9 分，主诉近 1 年半记忆力持续减退且明显担忧；全套客观神经心理量表 MMSE ${Math.max(mmseScore, 26)}/30、MoCA-B ${mocaStr(24, "max")}/30，均处于同年龄常模界值之上；全球 CDR=0 分，知情者 FAQ=0 分，日常生活完全独立，符合 Jessen 2014 标准主观认知下降。`,
       keyAbnormalities: [
         `SCD-Q9 主观记忆主诉显著 (${scdScore}/9分)，自感近事遗忘且伴有情绪焦虑担忧`,
-        `客观量表 MMSE (${Math.max(mmseScore, 26)}分) 与 MoCA-B (${Math.max(mocaScore, 24)}分) 均在同年龄与受教育(${edu}年)常模内`,
+        `客观量表 MMSE (${Math.max(mmseScore, 26)}分) 与 MoCA-B (${mocaStr(24, "max")}分) 均在同年龄与受教育(${edu}年)常模内`,
         "知情者 FAQ 0分、全球 CDR 0分，完全保留独立社会日常生活自理能力",
         `头颅 MRI 海马 MTA ${Math.min(mriMta, 1)}级，无明显皮质局灶性脑萎缩`,
       ],
@@ -103,7 +104,7 @@ export function generateDynamicScenarios(record: SubjectRecord): MockClinicalSce
 
 二、多维临床依据与神经心理特征：
 1. 主观记忆主诉：SCD-Q9 自评分数 ${scdScore}/9 分，主要表现为近事遗忘频度增加、比同龄人更感吃力且伴有明确的内心担忧，符合 Jessen 等提出的 SCD-plus 高危主诉标准。
-2. 客观神经测验：MMSE ${Math.max(mmseScore, 26)}/30 分，MoCA-B ${Math.max(mocaScore, 24)}/30 分，均高于受教育常模界值，未达到 MCI 客观损害界限。
+2. 客观神经测验：MMSE ${Math.max(mmseScore, 26)}/30 分，MoCA-B ${mocaStr(24, "max")}/30 分，均高于受教育常模界值，未达到 MCI 客观损害界限。
 3. 痴呆分级与功能：CDR 全球评分 0 分，知情者功能活动量表 FAQ 0 分，生活自理完全正常。
 4. 影像与生物学框架：头颅 MRI 示双侧海马形态规则 (MTA ${Math.min(mriMta, 1)}级)，APOE 基因型为 ${apoe}。
 
@@ -120,9 +121,9 @@ export function generateDynamicScenarios(record: SubjectRecord): MockClinicalSce
       categoryLabel: "遗忘型轻度认知障碍 (aMCI 多领域)",
       title: `${name} - 遗忘型轻度认知障碍 (aMCI, 海马情景记忆受累)`,
       confidence: randomConfidence(0.91),
-      summary: `受试者 ${name} (${age}岁) 客观测验 MMSE 评分为 ${Math.min(mmseScore, 24)}/30 分、MoCA-B 为 ${Math.min(mocaScore, 20)}/30 分；延迟回忆得分显著低于受教育调整后常模临界值 (落后 >1.5 SD)；全球 CDR 评分为 0.5 分 (记忆域 0.5 分)；生活基本自理但复杂工具性日常能力轻度耗时，伴内侧颞叶海马萎缩 (MTA ${Math.max(mriMta, 2)}级)，符合 Albert 2011 诊断标准。`,
+      summary: `受试者 ${name} (${age}岁) 客观测验 MMSE 评分为 ${Math.min(mmseScore, 24)}/30 分、MoCA-B 为 ${mocaStr(20, "min")}/30 分；延迟回忆得分显著低于受教育调整后常模临界值 (落后 >1.5 SD)；全球 CDR 评分为 0.5 分 (记忆域 0.5 分)；生活基本自理但复杂工具性日常能力轻度耗时，伴内侧颞叶海马萎缩 (MTA ${Math.max(mriMta, 2)}级)，符合 Albert 2011 诊断标准。`,
       keyAbnormalities: [
-        `客观神经心理测验 MMSE ${Math.min(mmseScore, 24)}分，MoCA-B ${Math.min(mocaScore, 20)}分，情景记忆长延迟回忆明确受损`,
+        `客观神经心理测验 MMSE ${Math.min(mmseScore, 24)}分，MoCA-B ${mocaStr(20, "min")}分，情景记忆长延迟回忆明确受损`,
         `全球 CDR 评分为 0.5 分，记忆领域得分 0.5，知情者 FAQ 得分 4 分`,
         `头颅 MRI 呈双侧海马轻中度萎缩 (MTA ${Math.max(mriMta, 2)}级)，脑室旁白质轻度疏松 (Fazekas 1级)`,
         `APOE 基因检测提示为 ${apoe}，阿尔茨海默病神经退行性病理演进风险高`,
@@ -141,7 +142,7 @@ export function generateDynamicScenarios(record: SubjectRecord): MockClinicalSce
 
 二、多维临床依据与神经心理特征：
 1. 核心症状：近事遗忘持续 2 年以上，患者及家属均证实记忆力明显减退，常反复询问相同问题。
-2. 客观测验损害：MMSE 得分 ${Math.min(mmseScore, 24)}/30 分，MoCA-B 得分 ${Math.min(mocaScore, 20)}/30 分，听觉词语学习长延迟回忆落后于同龄常模 1.8 个标准差。
+2. 客观测验损害：MMSE 得分 ${Math.min(mmseScore, 24)}/30 分，MoCA-B 得分 ${mocaStr(20, "min")}/30 分，听觉词语学习长延迟回忆落后于同龄常模 1.8 个标准差。
 3. 日常生活能力：CDR 全球评分 0.5 分，FAQ 4分，基本生活自理，但处理财务及复杂家务较前明显吃力。
 4. 影像与生物学框架：头颅 3.0T MRI 提示双侧内侧颞叶海马萎缩 (MTA ${Math.max(mriMta, 2)}级)；APOE 基因型为 ${apoe}。
 
@@ -196,9 +197,9 @@ export function generateDynamicScenarios(record: SubjectRecord): MockClinicalSce
       categoryLabel: "轻度阿尔茨海默病痴呆 (Mild AD Dementia)",
       title: `${name} - 阿尔茨海默病痴呆阶段 (轻度, 全面认知损害伴社会功能减退)`,
       confidence: randomConfidence(0.96),
-      summary: `受试者 ${name} (${age}岁) 客观量表 MMSE 得分 ${Math.min(mmseScore, 18)}/30 分，MoCA-B 得分 ${Math.min(mocaScore, 15)}/30 分；CDR 全球评分为 1.0 分；日常生活能力明显受损，知情者 FAQ 得分 12 分 (独立购物、服药与理财严重困难)；头颅 MRI 显示双侧内侧颞叶海马重度萎缩 (MTA ${Math.max(mriMta, 3)}级)，符合轻度阿尔茨海默病痴呆阶段。`,
+      summary: `受试者 ${name} (${age}岁) 客观量表 MMSE 得分 ${Math.min(mmseScore, 18)}/30 分，MoCA-B 得分 ${mocaStr(15, "min")}/30 分；CDR 全球评分为 1.0 分；日常生活能力明显受损，知情者 FAQ 得分 12 分 (独立购物、服药与理财严重困难)；头颅 MRI 显示双侧内侧颞叶海马重度萎缩 (MTA ${Math.max(mriMta, 3)}级)，符合轻度阿尔茨海默病痴呆阶段。`,
       keyAbnormalities: [
-        `MMSE 得分 ${Math.min(mmseScore, 18)}/30 分，MoCA-B 得分 ${Math.min(mocaScore, 15)}/30 分，近事遗忘与定向力全面受损`,
+        `MMSE 得分 ${Math.min(mmseScore, 18)}/30 分，MoCA-B 得分 ${mocaStr(15, "min")}/30 分，近事遗忘与定向力全面受损`,
         `CDR 全球评分 1.0 分，知情者 FAQ 12 分，已丧失独立社会生活自理能力`,
         `头颅 MRI 显示双侧海马萎缩严重 (MTA ${Math.max(mriMta, 3)}级)，侧脑室颞角明显扩大`,
         `APOE 基因型为 ${apoe}，病史呈持续隐匿进展`,
@@ -217,7 +218,7 @@ export function generateDynamicScenarios(record: SubjectRecord): MockClinicalSce
 
 二、多维临床依据与神经心理特征：
 1. 临床病史：近3年出现进行性近事遗忘，渐进性加重，外出容易迷路，常认错亲友姓名。
-2. 客观测验：MMSE ${Math.min(mmseScore, 18)}/30 分，MoCA-B ${Math.min(mocaScore, 15)}/30 分，时间定向、地点定向及短长延迟回忆接近零分。
+2. 客观测验：MMSE ${Math.min(mmseScore, 18)}/30 分，MoCA-B ${mocaStr(15, "min")}/30 分，时间定向、地点定向及短长延迟回忆接近零分。
 3. 功能损害：全球 CDR 1.0 分，FAQ 12 分，已无法独立做饭、服药及完成个人财务管理。
 4. 结构影像：头颅 MRI 显示双侧内侧颞叶海马严重萎缩 (MTA ${Math.max(mriMta, 3)}级)，弥漫性皮层萎缩明显。
 
@@ -234,9 +235,9 @@ export function generateDynamicScenarios(record: SubjectRecord): MockClinicalSce
       categoryLabel: "认知健康对照 (Healthy Normal)",
       title: `${name} - 认知功能健康对照 (年龄与文化程度相匹配常模)`,
       confidence: randomConfidence(0.97),
-      summary: `受试者 ${name} (${age}岁) SCD-Q9 自评分数仅为 ${Math.min(scdScore, 2)}/9 分，无显著进行性主观记忆抱怨；MMSE ${Math.max(mmseScore, 29)}/30 分，MoCA-B ${Math.max(mocaScore, 28)}/30 分，各认知亚域功能均处于同龄前 15% 优秀水平；全球 CDR=0 分，生活社交自理完全正常。`,
+      summary: `受试者 ${name} (${age}岁) SCD-Q9 自评分数仅为 ${Math.min(scdScore, 2)}/9 分，无显著进行性主观记忆抱怨；MMSE ${Math.max(mmseScore, 29)}/30 分，MoCA-B ${mocaStr(28, "max")}/30 分，各认知亚域功能均处于同龄前 15% 优秀水平；全球 CDR=0 分，生活社交自理完全正常。`,
       keyAbnormalities: [
-        `全套神经心理量表测试成绩优异：MMSE ${Math.max(mmseScore, 29)}分、MoCA-B ${Math.max(mocaScore, 28)}分`,
+        `全套神经心理量表测试成绩优异：MMSE ${Math.max(mmseScore, 29)}分、MoCA-B ${mocaStr(28, "max")}分`,
         "SCD-Q9 自评未达主观认知下降界值，无明确记忆障碍忧虑",
         "日常生活活动能力 FAQ 0分，社会活动及职业技能保持良好",
         "头颅 MRI 未见异常脑萎缩或海马形态变细征象",
@@ -254,7 +255,7 @@ export function generateDynamicScenarios(record: SubjectRecord): MockClinicalSce
 
 二、多维临床依据与神经心理特征：
 1. 主诉与症状：受试者自感记忆力良好，无明显丢三落四或认知衰退抱怨。
-2. 量表表现：MMSE ${Math.max(mmseScore, 29)}/30 分，MoCA-B ${Math.max(mocaScore, 28)}/30 分，定向力、计算力、视空间及记忆力全部满分或接近满分。
+2. 量表表现：MMSE ${Math.max(mmseScore, 29)}/30 分，MoCA-B ${mocaStr(28, "max")}/30 分，定向力、计算力、视空间及记忆力全部满分或接近满分。
 3. 功能评定：CDR 全球评分 0 分，生活能力完全正常。
 4. 影像表现：头颅 MRI 结构完整，脑沟裂正常，海马无萎缩。
 

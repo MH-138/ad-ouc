@@ -644,7 +644,7 @@ export function calculateGlobalCDR(cdr: SubjectRecord["scales"]["cdr"]) {
     cdr?.personalCare ?? 0,
   ];
 
-  const sumOfBoxes = Math.round((M + secondaries.reduce((a, b) => a + b, 0)) * 10) / 10;
+  const sumOfBoxes = Math.round((M + secondaries.reduce<number>((a, b) => a + b, 0)) * 10) / 10;
 
   const sameAsM = secondaries.filter((s) => s === M).length;
   const greaterThanM = secondaries.filter((s) => s > M).length;
@@ -739,30 +739,48 @@ export function calculateSCDQ9(scd: SubjectRecord["scdQ9"]) {
 }
 
 // 20. Comprehensive Overall Evaluation
+// BUG-EXPORT-02: 空白保护辅助——判断量表输入是否真实作答（避免空对象被算成 0 分亮灯）
+function scaleAnswered(input: any): boolean {
+  return (
+    input != null &&
+    typeof input === "object" &&
+    Object.values(input).some((v) => v != null && Number(v) !== 0)
+  );
+}
+
+// 未作答量表的标记包装：isAssessed=false 且强制 isAbnormal=false，防止导出层误报红/绿灯
+function markAssessed(result: any, assessed: boolean): any {
+  return {
+    ...result,
+    isAssessed: assessed,
+    isAbnormal: assessed ? (result.isAbnormal ?? false) : false,
+  };
+}
+
 export function evaluateCompleteAssessment(record: SubjectRecord): AssessmentSummaryResults {
   const eduYears = record.demographics?.educationYears || 0;
   const age = record.demographics?.age || 65;
   const scales = record.scales || ({} as any);
 
   return {
-    scdQ9: calculateSCDQ9(record.scdQ9),
-    handedness: calculateHandedness(scales.handedness?.tasks || {}),
-    mmse: calculateMMSE(scales.mmse?.items || {}, eduYears),
-    mocaB: calculateMoCAB(scales.mocaB || {}, eduYears),
-    avltH: calculateAVLTH(scales.avltH || {}, age, eduYears),
-    logicalMemory: calculateLogicalMemory(scales.logicalMemory || {}, eduYears),
-    vft: calculateVFT(scales.vft || {}, eduYears, age),
-    bnt: calculateBNT(scales.bnt || {}, eduYears, age),
-    stt: calculateSTT(scales.stt || {}, eduYears, age),
-    mes: calculateMES(scales.mes || {}, eduYears),
-    faq: calculateFAQ(scales.faq?.items || {}),
-    ecog: calculateEcog(scales.ecog?.items || {}),
-    gds15: calculateGDS15(scales.gds15?.answers || {}),
-    hamd17: calculateHAMD17(scales.hamd17?.items || {}),
-    hama: calculateHAMA(scales.hama?.items || {}),
-    psqi: calculatePSQI(scales.psqi || {}),
-    rbdsq: calculateRBDSQ(scales.rbdsq?.items || {}),
-    ess: calculateESS(scales.ess?.items || {}),
-    npi: calculateNPI(scales.npi?.items || {}),
-  };
+    scdQ9: markAssessed(calculateSCDQ9(record.scdQ9), !!record.scdQ9 && scaleAnswered(record.scdQ9)),
+    handedness: markAssessed(calculateHandedness(scales.handedness?.tasks || {}), !!(scales.handedness?.tasks && Object.keys(scales.handedness.tasks).length)),
+    mmse: markAssessed(calculateMMSE(scales.mmse?.items || {}, eduYears), scaleAnswered(scales.mmse?.items)),
+    mocaB: markAssessed(calculateMoCAB(scales.mocaB || {}, eduYears), scaleAnswered(scales.mocaB)),
+    avltH: markAssessed(calculateAVLTH(scales.avltH || {}, age, eduYears), scaleAnswered(scales.avltH)),
+    logicalMemory: markAssessed(calculateLogicalMemory(scales.logicalMemory || {}, eduYears), scaleAnswered(scales.logicalMemory)),
+    vft: markAssessed(calculateVFT(scales.vft || {}, eduYears, age), scaleAnswered(scales.vft)),
+    bnt: markAssessed(calculateBNT(scales.bnt || {}, eduYears, age), scaleAnswered(scales.bnt)),
+    stt: markAssessed(calculateSTT(scales.stt || {}, eduYears, age), scaleAnswered(scales.stt)),
+    mes: markAssessed(calculateMES(scales.mes || {}, eduYears), scaleAnswered(scales.mes)),
+    faq: markAssessed(calculateFAQ(scales.faq?.items || {}), scaleAnswered(scales.faq?.items)),
+    ecog: markAssessed(calculateEcog(scales.ecog?.items || {}), scaleAnswered(scales.ecog?.items)),
+    gds15: markAssessed(calculateGDS15(scales.gds15?.answers || {}), scaleAnswered(scales.gds15?.answers)),
+    hamd17: markAssessed(calculateHAMD17(scales.hamd17?.items || {}), scaleAnswered(scales.hamd17?.items)),
+    hama: markAssessed(calculateHAMA(scales.hama?.items || {}), scaleAnswered(scales.hama?.items)),
+    psqi: markAssessed(calculatePSQI(scales.psqi || {}), scaleAnswered(scales.psqi)),
+    rbdsq: markAssessed(calculateRBDSQ(scales.rbdsq?.items || {}), scaleAnswered(scales.rbdsq?.items)),
+    ess: markAssessed(calculateESS(scales.ess?.items || {}), scaleAnswered(scales.ess?.items)),
+    npi: markAssessed(calculateNPI(scales.npi?.items || {}), scaleAnswered(scales.npi?.items)),
+  } as AssessmentSummaryResults;
 }
