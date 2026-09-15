@@ -467,6 +467,13 @@ app.post("/api/ai/parse-medical-record", async (req: Request, res: Response) => 
 
     const ai = getGeminiClient();
     if (!ai) {
+      if (fileBase64 && mimeType && !rawText?.trim()) {
+        return res.status(503).json({
+          success: false,
+          error:
+            "当前环境未配置 GEMINI_API_KEY，暂时无法解析上传图片。请先配置大模型能力，或改为粘贴病历文本后建档。",
+        });
+      }
       // Return smart simulated OCR & clinical parsing
       const fallbackResult = parseMedicalRecordFallback(rawText || "");
       return res.json({

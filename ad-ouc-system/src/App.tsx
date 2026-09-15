@@ -377,13 +377,7 @@ export default function App() {
             onDeletePatient={handleDeletePatient}
             onLoadPreset={handleLoadPreset}
             onNewRecord={handleNewPatient}
-            onOpenUploadModal={() => {
-              if (!activeRecord) {
-                alert("请先选择受试者后再上传病历或影像。");
-                return;
-              }
-              setIsUploadModalOpen(true);
-            }}
+            onOpenUploadModal={() => setIsUploadModalOpen(true)}
             onExportExcel={(rec) => {
               const target = rec || activeRecord;
               if (target) exportRecordToExcel(target, { anonymize: anonymizeExport });
@@ -522,13 +516,7 @@ export default function App() {
             onDeletePatient={handleDeletePatient}
             onLoadPreset={handleLoadPreset}
             onNewRecord={handleNewPatient}
-            onOpenUploadModal={() => {
-              if (!activeRecord) {
-                alert("请先选择受试者后再上传病历或影像。");
-                return;
-              }
-              setIsUploadModalOpen(true);
-            }}
+            onOpenUploadModal={() => setIsUploadModalOpen(true)}
             onExportExcel={(rec) => {
               const target = rec || activeRecord;
               if (target) exportRecordToExcel(target, { anonymize: anonymizeExport });
@@ -575,13 +563,7 @@ export default function App() {
         }
         setIsPrintModalOpen(true);
       }}
-      onOpenUploadModal={() => {
-        if (!activeRecord) {
-          alert("请先选择受试者后再上传病历。");
-          return;
-        }
-        setIsUploadModalOpen(true);
-      }}
+      onOpenUploadModal={() => setIsUploadModalOpen(true)}
       onOpenApprovalModal={() => setIsApprovalModalOpen(true)}
       pendingAiCount={pendingAiConsultations.length}
       onExportExcel={() => {
@@ -666,17 +648,18 @@ export default function App() {
             onClose={() => setIsPrintModalOpen(false)}
             record={activeRecord}
           />
-
-          <MedicalRecordUploadModal
-            isOpen={isUploadModalOpen}
-            onClose={() => setIsUploadModalOpen(false)}
-            currentRecord={activeRecord}
-            onApplyParsedData={(updated) => {
-              handleUpdateRecord(updated);
-            }}
-          />
         </>
       )}
+
+      <MedicalRecordUploadModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        currentRecord={activeRecord}
+        onApplyParsedData={(updated) => {
+          handleUpdateRecord(updated);
+        }}
+        onCreatePatientFromParsedData={handleCreatePatient}
+      />
 
       {/* Doctor Approval & Electronic Signature Modal */}
       <DoctorApprovalModal

@@ -15,12 +15,14 @@ import {
 } from "lucide-react";
 import { SubjectRecord } from "../types/assessment";
 import { tursoApi } from "../services/tursoApi";
+import { createEmptySubjectRecord } from "../utils/initialPatient";
 
 interface MedicalRecordUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   onApplyParsedData: (updatedRecord: SubjectRecord) => void;
-  currentRecord: SubjectRecord;
+  onCreatePatientFromParsedData: (newRecord: SubjectRecord) => void;
+  currentRecord?: SubjectRecord | null;
 }
 
 const CLINICAL_SIMULATION_CASES = [
@@ -138,6 +140,7 @@ export const MedicalRecordUploadModal: React.FC<MedicalRecordUploadModalProps> =
   isOpen,
   onClose,
   onApplyParsedData,
+  onCreatePatientFromParsedData,
   currentRecord,
 }) => {
   const [file, setFile] = useState<File | null>(null);
@@ -154,6 +157,257 @@ export const MedicalRecordUploadModal: React.FC<MedicalRecordUploadModalProps> =
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
+
+  const hasCurrentRecord = !!currentRecord;
+
+  const normalizeParsedData = (data: any) => {
+    const demographics = data?.demographics || data || {};
+    const history = data?.history || {};
+    const biomarkers = data?.biomarkers || {};
+    const age =
+      demographics.age !== undefined && demographics.age !== null
+        ? Number(demographics.age)
+        : undefined;
+    const educationYears =
+      demographics.educationYears !== undefined && demographics.educationYears !== null
+        ? Number(demographics.educationYears)
+        : undefined;
+    const height =
+      demographics.height !== undefined && demographics.height !== null
+        ? Number(demographics.height)
+        : undefined;
+    const weight =
+      demographics.weight !== undefined && demographics.weight !== null
+        ? Number(demographics.weight)
+        : undefined;
+    const gender =
+      demographics.gender === 1 || demographics.gender === 2 ? demographics.gender : 1;
+    const inferredBirthDate =
+      demographics.birthDate ||
+      (age ? `${new Date().getFullYear() - age}-06-15` : "");
+
+    return {
+      demographics: {
+        name: demographics.name || "",
+        idCard: demographics.idCard || data?.idCard || "",
+        gender,
+        age,
+        birthDate: inferredBirthDate,
+        educationYears,
+        height,
+        weight,
+        phone1: demographics.phone1 || "",
+        marriage:
+          demographics.marriage ?? demographics.maritalStatus ?? data?.maritalStatus ?? 1,
+        livingStatus:
+          demographics.livingStatus ?? data?.livingStatus ?? 2,
+      },
+      history: {
+        chiefComplaint: history.chiefComplaint || data?.chiefComplaint || "",
+        hypertension: !!history.hypertension,
+        hypertensionYears:
+          history.hypertensionYears !== undefined ? Number(history.hypertensionYears) : 0,
+        usualBp: history.usualBp || "",
+        maxBp: history.maxBp || "",
+        diabetes: !!history.diabetes,
+        diabetesYears:
+          history.diabetesYears !== undefined ? Number(history.diabetesYears) : 0,
+        cerebrovascular: !!history.cerebrovascular,
+        coronaryHeartDisease: !!history.coronaryHeartDisease,
+        hyperlipidemia: !!history.hyperlipidemia,
+        thyroidAbnormal: !!history.thyroidAbnormal,
+        tbi: !!history.tbi,
+        generalAnesthesia: !!history.generalAnesthesia,
+        familyHistoryDementia: !!history.familyHistoryDementia,
+      },
+      biomarkers: {
+        mriHippocampus:
+          biomarkers.mriHippocampus !== undefined && biomarkers.mriHippocampus !== null
+            ? Number(biomarkers.mriHippocampus)
+            : undefined,
+        apoeGenotype: biomarkers.apoeGenotype || "",
+        amyloidStatus: biomarkers.amyloidStatus,
+        tauStatus: biomarkers.tauStatus,
+      },
+      clinicalImpression: data?.clinicalImpression || "",
+      sourceDocName: data?.sourceDocName || file?.name || simulatedDocName || "",
+    };
+  };
+
+  const buildRecordFromParsedData = (data: any, record?: SubjectRecord | null): SubjectRecord => {
+    const normalized = normalizeParsedData(data);
+    const baseRecord =
+      record ||
+      createEmptySubjectRecord(
+        normalized.demographics.name || "OCR导入受试者"
+      );
+
+    return {
+      ...baseRecord,
+      updatedAt: new Date().toISOString(),
+      demographics: {
+        ...baseRecord.demographics,
+        name: normalized.demographics.name || baseRecord.demographics.name,
+        idCard: normalized.demographics.idCard || baseRecord.demographics.idCard,
+        gender: normalized.demographics.gender || baseRecord.demographics.gender,
+        age: normalized.demographics.age ?? baseRecord.demographics.age,
+        birthDate: normalized.demographics.birthDate || baseRecord.demographics.birthDate,
+        educationYears:
+          normalized.demographics.educationYears ?? baseRecord.demographics.educationYears,
+        height: normalized.demographics.height ?? baseRecord.demographics.height,
+        weight: normalized.demographics.weight ?? baseRecord.demographics.weight,
+        phone1: normalized.demographics.phone1 || baseRecord.demographics.phone1,
+        maritalStatus:
+          normalized.demographics.marriage ?? baseRecord.demographics.maritalStatus,
+        socialSupport: {
+          ...baseRecord.demographics.socialSupport,
+          livingAlone:
+            normalized.demographics.livingStatus === 1 ? 1 : baseRecord.demographics.socialSupport.livingAlone,
+        },
+        marriage: normalized.demographics.marriage,
+        livingStatus: normalized.demographics.livingStatus,
+      },
+      history: {
+        ...baseRecord.history,
+        hypertension: {
+          ...baseRecord.history.hypertension,
+          has: normalized.history.hypertension,
+          years: normalized.history.hypertension ? normalized.history.hypertensionYears || 1 : 0,
+          regularMed: normalized.history.hypertension,
+          usualBp: normalized.history.usualBp || baseRecord.history.hypertension.usualBp || "",
+          maxBp: normalized.history.maxBp || baseRecord.history.hypertension.maxBp || "",
+        },
+        diabetes: {
+          ...baseRecord.history.diabetes,
+          has: normalized.history.diabetes,
+          years: normalized.history.diabetes ? normalized.history.diabetesYears || 1 : 0,
+          regularMed: normalized.history.diabetes,
+        },
+        cerebrovascular: {
+          ...baseRecord.history.cerebrovascular,
+          has: normalized.history.cerebrovascular,
+        },
+        coronaryHeartDisease: {
+          ...baseRecord.history.coronaryHeartDisease,
+          has: normalized.history.coronaryHeartDisease,
+        },
+        hyperlipidemia: {
+          ...baseRecord.history.hyperlipidemia,
+          has: normalized.history.hyperlipidemia,
+          years: normalized.history.hyperlipidemia ? 1 : 0,
+          regularMed: normalized.history.hyperlipidemia,
+        },
+        thyroidAbnormality: {
+          ...baseRecord.history.thyroidAbnormality,
+          has: normalized.history.thyroidAbnormal,
+        },
+        tbi: {
+          ...baseRecord.history.tbi,
+          has: normalized.history.tbi,
+        },
+        generalAnesthesia: {
+          ...baseRecord.history.generalAnesthesia,
+          has: normalized.history.generalAnesthesia,
+        },
+        familyHistoryDementia: {
+          ...baseRecord.history.familyHistoryDementia,
+          has: normalized.history.familyHistoryDementia,
+          firstDegreeCount: normalized.history.familyHistoryDementia ? 1 : 0,
+          secondDegreeCount: 0,
+        },
+        chiefComplaint:
+          normalized.history.chiefComplaint || baseRecord.history.chiefComplaint,
+      },
+      presentIllness: {
+        ...baseRecord.presentIllness,
+        chiefComplaint:
+          normalized.history.chiefComplaint || baseRecord.presentIllness.chiefComplaint,
+        cognitiveDeficitDesc:
+          normalized.clinicalImpression || baseRecord.presentIllness.cognitiveDeficitDesc,
+      },
+      biomarkers: {
+        ...baseRecord.biomarkers,
+        mriPerformed:
+          normalized.biomarkers.mriHippocampus !== undefined
+            ? true
+            : baseRecord.biomarkers.mriPerformed,
+        hippocampalAtrophy:
+          normalized.biomarkers.mriHippocampus !== undefined
+            ? Number(normalized.biomarkers.mriHippocampus) > 0
+            : baseRecord.biomarkers.hippocampalAtrophy,
+        hippocampalSeverity:
+          normalized.biomarkers.mriHippocampus !== undefined
+            ? (Math.min(Math.max(Number(normalized.biomarkers.mriHippocampus), 1), 3) as 1 | 2 | 3)
+            : baseRecord.biomarkers.hippocampalSeverity,
+        mriHippocampus:
+          normalized.biomarkers.mriHippocampus !== undefined
+            ? Number(normalized.biomarkers.mriHippocampus) > 0
+            : baseRecord.biomarkers.mriHippocampus,
+        apoe4Genotype: normalized.biomarkers.apoeGenotype
+          ? {
+              tested: true,
+              value: normalized.biomarkers.apoeGenotype,
+            }
+          : baseRecord.biomarkers.apoe4Genotype,
+        apoeGenotype: normalized.biomarkers.apoeGenotype
+          ? {
+              tested: true,
+              value: normalized.biomarkers.apoeGenotype,
+            }
+          : baseRecord.biomarkers.apoeGenotype,
+        abetaPet:
+          normalized.biomarkers.amyloidStatus ?? baseRecord.biomarkers.abetaPet,
+        amyloidStatus:
+          normalized.biomarkers.amyloidStatus ?? baseRecord.biomarkers.amyloidStatus,
+        tauPet: normalized.biomarkers.tauStatus ?? baseRecord.biomarkers.tauPet,
+        tauStatus:
+          normalized.biomarkers.tauStatus ?? baseRecord.biomarkers.tauStatus,
+      },
+      diagnosis: {
+        ...baseRecord.diagnosis,
+        notes: normalized.clinicalImpression || baseRecord.diagnosis.notes,
+      },
+    };
+  };
+
+  const persistPatientRecord = async (record: SubjectRecord) => {
+    await tursoApi.savePatient({
+      id: record.id,
+      researchNo: record.subjectNo,
+      name: record.demographics?.name,
+      gender: record.demographics?.gender,
+      age: record.demographics?.age,
+      educationYears: record.demographics?.educationYears,
+      heightCm: record.demographics?.height,
+      weightKg: record.demographics?.weight,
+      phone: record.demographics?.phone1,
+      ...record,
+    });
+  };
+
+  const finalizeParsedRecord = async (data: any, autoClose = true) => {
+    const nextRecord = buildRecordFromParsedData(data, currentRecord);
+
+    if (hasCurrentRecord) {
+      onApplyParsedData(nextRecord);
+    } else {
+      onCreatePatientFromParsedData(nextRecord);
+    }
+
+    setSaveSuccess(true);
+
+    try {
+      await persistPatientRecord(nextRecord);
+    } catch (e) {
+      console.warn("Turso sync fallback:", e);
+    }
+
+    if (autoClose) {
+      setTimeout(() => {
+        onClose();
+      }, 800);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
@@ -212,7 +466,11 @@ export const MedicalRecordUploadModal: React.FC<MedicalRecordUploadModalProps> =
       const data = await res.json();
       if (data.success) {
         const result = data.clinicalJson || data.parsedData;
-        setParsedData(result);
+        if (hasCurrentRecord) {
+          setParsedData(result);
+        } else {
+          await finalizeParsedRecord(result);
+        }
       } else {
         setErrorMsg(data.error || "病历提取失败，请重试");
       }
@@ -250,14 +508,27 @@ export const MedicalRecordUploadModal: React.FC<MedicalRecordUploadModalProps> =
 
       const json = await res.json();
       if (json.success && (json.clinicalJson || json.parsedData)) {
-        setParsedData(json.clinicalJson || json.parsedData);
+        const result = json.clinicalJson || json.parsedData;
+        if (hasCurrentRecord) {
+          setParsedData(result);
+        } else {
+          await finalizeParsedRecord(result);
+        }
       } else {
         // Fallback to rich case data
-        setParsedData(selectedCase.data);
+        if (hasCurrentRecord) {
+          setParsedData(selectedCase.data);
+        } else {
+          await finalizeParsedRecord(selectedCase.data);
+        }
       }
     } catch (e) {
       // Direct rich clinical case mapping
-      setParsedData(selectedCase.data);
+      if (hasCurrentRecord) {
+        setParsedData(selectedCase.data);
+      } else {
+        await finalizeParsedRecord(selectedCase.data);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -265,86 +536,7 @@ export const MedicalRecordUploadModal: React.FC<MedicalRecordUploadModalProps> =
 
   const handleApplyToPatient = async () => {
     if (!parsedData) return;
-
-    const demo = parsedData.demographics || parsedData;
-    const history = parsedData.history || {};
-    const bio = parsedData.biomarkers || {};
-
-    const updated: SubjectRecord = {
-      ...currentRecord,
-      demographics: {
-        ...currentRecord.demographics,
-        name: demo.name || currentRecord.demographics.name,
-        gender: demo.gender || currentRecord.demographics.gender,
-        age: demo.age ? Number(demo.age) : currentRecord.demographics.age,
-        birthDate: demo.birthDate || currentRecord.demographics.birthDate,
-        educationYears:
-          demo.educationYears !== undefined
-            ? Number(demo.educationYears)
-            : currentRecord.demographics.educationYears,
-        height: demo.height ? Number(demo.height) : currentRecord.demographics.height,
-        weight: demo.weight ? Number(demo.weight) : currentRecord.demographics.weight,
-        phone1: demo.phone1 || currentRecord.demographics.phone1,
-        marriage: demo.marriage ?? currentRecord.demographics.marriage,
-        livingStatus: demo.livingStatus ?? currentRecord.demographics.livingStatus,
-      },
-      history: {
-        ...currentRecord.history,
-        hypertension: {
-          has: history.hypertension !== undefined ? history.hypertension : currentRecord.history?.hypertension?.has || false,
-          years: history.hypertensionYears || 5,
-          regularMed: true,
-          usualBp: history.usualBp || "130/80",
-          maxBp: history.maxBp || "150/95",
-        },
-        diabetes: {
-          has: history.diabetes !== undefined ? history.diabetes : currentRecord.history?.diabetes?.has || false,
-        },
-        cerebrovascular: {
-          has: history.cerebrovascular !== undefined ? history.cerebrovascular : currentRecord.history?.cerebrovascular?.has || false,
-        },
-        familyHistoryDementia: {
-          has: history.familyHistoryDementia !== undefined ? history.familyHistoryDementia : currentRecord.history?.familyHistoryDementia?.has || false,
-          firstDegreeCount: history.familyHistoryDementia ? 1 : 0,
-          secondDegreeCount: 0,
-        },
-      },
-      biomarkers: {
-        ...currentRecord.biomarkers,
-        mriHippocampus:
-          bio.mriHippocampus !== undefined
-            ? bio.mriHippocampus
-            : currentRecord.biomarkers?.mriHippocampus,
-        apoeGenotype: bio.apoeGenotype || currentRecord.biomarkers?.apoeGenotype,
-        amyloidStatus: bio.amyloidStatus || currentRecord.biomarkers?.amyloidStatus,
-        tauStatus: bio.tauStatus || currentRecord.biomarkers?.tauStatus,
-      },
-    };
-
-    onApplyParsedData(updated);
-    setSaveSuccess(true);
-
-    // Persist all data to Turso cloud database
-    try {
-      await tursoApi.savePatient({
-        id: updated.id,
-        researchNo: updated.subjectNo,
-        name: updated.demographics?.name,
-        gender: updated.demographics?.gender,
-        age: updated.demographics?.age,
-        educationYears: updated.demographics?.educationYears,
-        heightCm: updated.demographics?.height,
-        weightKg: updated.demographics?.weight,
-        phone: updated.demographics?.phone1,
-        ...updated,
-      });
-    } catch (e) {
-      console.warn("Turso sync fallback:", e);
-    }
-
-    setTimeout(() => {
-      onClose();
-    }, 800);
+    await finalizeParsedRecord(parsedData);
   };
 
   return (
@@ -361,7 +553,9 @@ export const MedicalRecordUploadModal: React.FC<MedicalRecordUploadModalProps> =
                 门诊病历与生化检验报告智能识别 (OCR)
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                支持上传门诊病历、血生化化验单(Aβ/Tau/同型半胱氨酸)及影像报告，智能结构化提取
+                {hasCurrentRecord
+                  ? "支持上传门诊病历、血生化化验单(Aβ/Tau/同型半胱氨酸)及影像报告，智能结构化提取"
+                  : "支持上传图片/PDF 病历后自动解析，并直接拼接为新的受试者档案"}
               </p>
             </div>
           </div>
@@ -468,7 +662,11 @@ export const MedicalRecordUploadModal: React.FC<MedicalRecordUploadModalProps> =
               {/* Action Bar */}
               <div className="flex items-center justify-between gap-3 pt-2">
                 <div className="text-xs text-slate-500">
-                  {isLoading ? "正在解析文档..." : "可上传真实文档，也可使用右侧示例"}
+                  {isLoading
+                    ? "正在解析文档..."
+                    : hasCurrentRecord
+                      ? "可上传真实文档，也可使用右侧示例"
+                      : "解析成功后将自动创建并选中新受试者档案"}
                 </div>
 
                 <div className="flex items-center gap-2.5">
@@ -674,7 +872,7 @@ export const MedicalRecordUploadModal: React.FC<MedicalRecordUploadModalProps> =
                     className="flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-teal-700 transition cursor-pointer"
                   >
                     <ShieldCheck className="h-4 w-4" />
-                    <span>同步至受试者档案</span>
+                    <span>{hasCurrentRecord ? "同步至受试者档案" : "创建受试者档案"}</span>
                   </button>
                 </div>
               </div>
