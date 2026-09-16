@@ -38,7 +38,7 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
   // Form State - Empty defaults, requiring explicit user input
   const [name, setName] = useState("");
   const [idCard, setIdCard] = useState("");
-  const [gender, setGender] = useState<1 | 2>(1);
+  const [gender, setGender] = useState<0 | 1 | 2>(1);
   const [birthYearStr, setBirthYearStr] = useState<string>("");
   const [ageStr, setAgeStr] = useState<string>("");
   const [heightStr, setHeightStr] = useState<string>("");
@@ -368,7 +368,7 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
           height: parsedHeight || 165,
           weight: parsedWeight || 60,
           educationYears: parsedEdu,
-          maritalStatus: maritalStatus as 1 | 2 | 3 | 4 | 5,
+          maritalStatus: maritalStatus as 0 | 1 | 2 | 3 | 4 | 5,
           socialSupport: {
             ...baseRecord.demographics.socialSupport,
             livingAlone: livingStatus === 1 ? 1 : 2,
@@ -639,6 +639,17 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
                   >
                     女
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setGender(0)}
+                    className={`flex-1 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                      gender === 0
+                        ? "bg-teal-600 text-white shadow-xs"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    未知 / 不愿透露
+                  </button>
                 </div>
               </div>
 
@@ -778,6 +789,7 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
                   <option value={2}>独身 / 未婚</option>
                   <option value={3}>离异</option>
                   <option value={4}>丧偶</option>
+                  <option value={0}>未知 / 不愿透露</option>
                 </select>
               </div>
 
@@ -794,6 +806,8 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
                   <option value={2}>与配偶居住</option>
                   <option value={3}>与子女同住</option>
                   <option value={4}>养老机构</option>
+                  <option value={5}>其他</option>
+                  <option value={0}>未知 / 不愿透露</option>
                 </select>
               </div>
 

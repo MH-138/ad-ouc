@@ -23,7 +23,7 @@ export interface SubjectRecord {
     occupation: 1 | 2 | 3 | 4 | 5; // 1.干部 2.工人 3.农民 4.个体商业 5.其他
     occupationOther?: string;
     workNature: 1 | 2 | 3 | 4; // 1.脑力 2.体力 3.脑力+体力 4.其他
-    maritalStatus: 1 | 2 | 3 | 4 | 5; // 1.已婚 2.未婚 3.离异 4.丧偶 5.再婚
+    maritalStatus: 0 | 1 | 2 | 3 | 4 | 5; // 0.未知/不愿透露 1.已婚 2.未婚 3.离异 4.丧偶 5.再婚
     socialSupport: {
       livingAlone: 1 | 2; // 1.一个人 2.和家人
       coResidents: number[]; // 1.配偶 2.子女 3.孙子女 4.父母 5.其他 6.NA

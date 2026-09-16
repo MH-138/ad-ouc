@@ -353,7 +353,22 @@ export async function upsertPatient(data: any) {
   const db = getTursoClient();
   const now = new Date().toISOString();
   const id = data.id || `pat_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-  const researchNo = data.researchNo || data.subjectNo || `S${new Date().getFullYear().toString().slice(-2)}-${Math.floor(1000 + Math.random() * 9000)}`;
+  // [BUG-OTHER-02] 研究编号原为纯随机生成、无查重，规模化建档存在撞号风险；
+  // 现改为：优先沿用传入编号，否则生成 SYY-NNNN 并查库去重（最多重试 5 次）。
+  let researchNo = data.researchNo || data.subjectNo;
+  if (!researchNo) {
+    const genResearchNo = () =>
+      `S${new Date().getFullYear().toString().slice(-2)}-${Math.floor(1000 + Math.random() * 9000)}`;
+    researchNo = genResearchNo();
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const collision = await db.execute({
+        sql: "SELECT 1 FROM patients WHERE research_no = ? LIMIT 1",
+        args: [researchNo],
+      });
+      if (!collision.rows || collision.rows.length === 0) break;
+      researchNo = genResearchNo();
+    }
+  }
   const name = data.name || data.demographics?.name || "受试者";
   const gender = String(data.gender ?? data.demographics?.gender ?? "1");
   const birthYear = data.birthYear || (data.age ? new Date().getFullYear() - data.age : 1955);
