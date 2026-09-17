@@ -6,7 +6,7 @@ export interface SubjectRecord {
   centerNo: string; // e.g. "01"
   visitCode: string; // e.g. "W000 (入选)"
   subjectNo: string; // e.g. "SCD-2026-001"
-  evaluator: string; // 研究者姓名 (如 韩璎)
+  evaluator: string; // 研究者姓名 (如 示例医师)
   evalDate: string; // 评估日期 YYYY-MM-DD
 
   // Section A: Demographics
@@ -549,8 +549,8 @@ export type CognitiveDomain =
 export interface AssessmentSummaryResults {
   scdQ9: { score: number; isPositive: boolean; isAssessed: boolean };
   handedness: { score: number; result: "左利手" | "双利手" | "右利手" | "未评定"; leftSum?: number; rightSum?: number; isAssessed: boolean };
-  mmse: { score: number; cutoff: number; eduGroup: string; isAbnormal: boolean };
-  mocaB: { score: number; cutoff: number; eduGroup: string; isAbnormal: boolean };
+  mmse: { score: number; cutoff: number; eduGroup: string; isAbnormal: boolean; isAssessed: boolean };
+  mocaB: { score: number; cutoff: number; eduGroup: string; isAbnormal: boolean; isAssessed: boolean };
   avltH: {
     n1Score: number;
     n2Score: number;
@@ -568,6 +568,7 @@ export interface AssessmentSummaryResults {
     isDelayAbnormal: boolean;
     isN5Abnormal: boolean;
     isRecognitionAbnormal: boolean;
+    isAbnormal: boolean;
     isAssessed: boolean;
   };
   logicalMemory: {
@@ -612,6 +613,25 @@ export interface AssessmentSummaryResults {
     isSTTBAbnormal: boolean;
     isAAbnormal: boolean;
     isBAbnormal: boolean;
+    isAbnormal: boolean;
+    isAssessed: boolean;
+  };
+  adasCog: {
+    recallAvg: number;
+    recognitionAvg: number;
+    totalScore: number;
+    severity: string;
+    concentrationDifficulty: number;
+    isAbnormal: boolean;
+    isAssessed: boolean;
+  };
+  cdr: {
+    globalCDR: 0 | 0.5 | 1 | 2 | 3;
+    cdrSumOfBoxes: number;
+    sumOfBoxes: number;
+    description: string;
+    isAbnormal: boolean;
+    isAssessed: boolean;
   };
   mes: {
     score: number;

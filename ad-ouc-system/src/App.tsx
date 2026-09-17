@@ -50,13 +50,7 @@ import { ArrowLeft, User, Users } from "lucide-react";
 
 export default function App() {
   // 1. Multi-Portal Routing state ("portal" | "patient" | "informant" | "examiner")
-  const [currentPortal, setCurrentPortal] = useState<PortalType>(() => {
-    const saved = localStorage.getItem("xuanwu_scd_active_portal");
-    if (saved && ["portal", "patient", "informant", "examiner"].includes(saved)) {
-      return saved as PortalType;
-    }
-    return "portal";
-  });
+  const [currentPortal, setCurrentPortal] = useState<PortalType>("portal");
 
   // 2. Active Page within Examiner Workbench
   const [activePage, setActivePage] = useState<AppPageId>("patient_center");

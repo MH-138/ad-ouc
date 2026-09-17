@@ -197,7 +197,7 @@ export const SectionBiomarkersDiagnosis: React.FC<Props> = ({ record, onChange }
             J
           </div>
           <div>
-            <h3 className="font-bold text-base text-slate-800">J. 临床综合诊断与入组分类 (宣武规范)</h3>
+            <h3 className="font-bold text-base text-slate-800">J. 临床综合诊断与入组分类 (通用规范)</h3>
             <p className="text-xs text-slate-500">
               结合主诉自述(SCD-Q9)、客观神经心理学量表(MMSE/MoCA/AVLT/STT/CDR)及生物学指标进行确诊分类
             </p>
@@ -239,7 +239,7 @@ export const SectionBiomarkersDiagnosis: React.FC<Props> = ({ record, onChange }
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              宣武医院多中心临床专家诊断意见与科研入组说明：
+              多中心临床专家诊断意见与科研入组说明：
             </label>
             <textarea
               rows={3}

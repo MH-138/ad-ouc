@@ -12,13 +12,13 @@ export function createDefaultSubjectRecord(name = "新受试者"): SubjectRecord
     centerNo: "01",
     visitCode: "W000 (入选)",
     subjectNo: "01-" + Math.floor(1000 + Math.random() * 9000),
-    evaluator: "韩璎",
+    evaluator: "示例医师",
     evalDate: today,
 
     demographics: {
       name,
       idCard: "",
-      address: "北京市西城区宣武门内大街",
+      address: "北京市西城区示例大街",
       gender: 1,
       age: 65,
       birthDate: "1961-05-15",
@@ -384,12 +384,12 @@ export function createDefaultSubjectRecord(name = "新受试者"): SubjectRecord
 
     diagnosis: {
       category: 1, // SCD
-      notes: "符合SCD国际工作组及宣武医院SCD多中心入组标准：存在主观记忆减退主诉且自感担忧，客观认知量表测试MMSE/MoCA及CDR评分在同龄及受教育年限正常范围内，日常生活能力独立完整。",
+      notes: "符合SCD国际工作组SCD多中心入组标准：存在主观记忆减退主诉且自感担忧，客观认知量表测试MMSE/MoCA及CDR评分在同龄及受教育年限正常范围内，日常生活能力独立完整。",
     },
 
     followUp: {
       nextVisitDate: nextYear,
-      evaluatorSignature: "韩璎",
+      evaluatorSignature: "示例医师",
     },
   };
 }
@@ -623,14 +623,14 @@ export const TYPICAL_SCD_PRESET: SubjectRecord = {
   },
   diagnosis: {
     category: 1,
-    notes: "【宣武医院神经内科临床诊断与随访医嘱】\n临床诊断：主观认知下降 (Subjective Cognitive Decline, SCD)\n评定依据：受试者存在主观记忆减退主诉且自感担忧（SCD-Q9评分为7分），客观认知量表测试 MMSE 28分、MoCA-B 26分，全球 CDR=0分，知情者 FAQ 0分，日常生活自理能力完整。\n随访医嘱：\n1. 纳入宣武医院多中心 SCD 早期干预随访队列，预约 12 个月后复查。\n2. 执行地中海膳食与有氧步行锻炼处方。\n3. 控制血压与代谢危险因素，定期检测血浆 p-tau217 与睡眠质量。",
-    evaluatorSignature: "韩璎 教授 / 主任医师",
+    notes: "【神经内科临床诊断与随访医嘱】\n临床诊断：主观认知下降 (Subjective Cognitive Decline, SCD)\n评定依据：受试者存在主观记忆减退主诉且自感担忧（SCD-Q9评分为7分），客观认知量表测试 MMSE 28分、MoCA-B 26分，全球 CDR=0分，知情者 FAQ 0分，日常生活自理能力完整。\n随访医嘱：\n1. 纳入多中心 SCD 早期干预随访队列，预约 12 个月后复查。\n2. 执行地中海膳食与有氧步行锻炼处方。\n3. 控制血压与代谢危险因素，定期检测血浆 p-tau217 与睡眠质量。",
+    evaluatorSignature: "示例医师（演示）",
     approvedAt: "2026-09-08T09:30:00.000Z",
     approvalStatus: "approved",
   },
   followUp: {
     nextVisitDate: "2027-09-08",
-    evaluatorSignature: "韩璎 教授 / 主任医师",
+    evaluatorSignature: "示例医师（演示）",
     signDate: "2026-09-08",
   },
 };
@@ -747,3 +747,24 @@ export const DEFAULT_COHORT: SubjectRecord[] = [
   BLANK_PATIENT_1_PRESET,
   BLANK_PATIENT_2_PRESET,
 ];
+
+/**
+ * 系统内置的"标准受试者分层队列"研究编号。
+ * 这 4 位是用于分层演示（SCD 组 vs 空白组）的**模拟数据**，并非真实受试者，
+ * 界面上必须显式标注为「模拟数据」，避免被误认为真实病例。
+ */
+export const SIMULATED_SUBJECT_NOS: string[] = [
+  "SCD-2026-001",
+  "SCD-2026-002",
+  "BLANK-2026-003",
+  "BLANK-2026-004",
+];
+
+/**
+ * 判断某档案是否为系统内置的模拟演示受试者。
+ * 按研究编号（subjectNo / research_no）识别，可同时兼容"云库拉取"与"本地 DEFAULT_COHORT"两种来源。
+ */
+export const isSimulatedRecord = (
+  record?: { subjectNo?: string | null } | null
+): boolean =>
+  Boolean(record && record.subjectNo && SIMULATED_SUBJECT_NOS.includes(record.subjectNo));

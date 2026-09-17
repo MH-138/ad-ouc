@@ -4,7 +4,7 @@
 
 > **系统名称**：阿尔茨海默病与认知障碍临床数据采集系统  
 > **所属版本**：P2 阶段架构迭代与 OCR 多模态设计  
-> **设计基准**：首都医科大学宣武医院认知中心临床规范、PaddleOCR-VL-1.6 视觉多模态大模型标准  
+> **设计基准**：认知障碍临床评估规范、PaddleOCR-VL-1.6 视觉多模态大模型标准  
 > **隔离红线**：严禁侵入历史版本原型代码（`scales.js` / `app.js` / `styles.css`），所有现代扩展物理隔离于 `src/` 与 `server/`。
 
 ---
@@ -52,7 +52,7 @@
 #### 请求参数 (Request Payload)
 ```typescript
 interface OcrParseRequest {
-  /** 模式一：选择内置宣武医院标准测试案例 (如 xuanwu_outpatient | mri_report) */
+  /** 模式一：选择内置标准测试案例 (如 xuanwu_outpatient | mri_report) */
   sampleKey?: "xuanwu_outpatient" | "mri_report";
   /** 模式二：上传的图像或 PDF Base64 编码字符串 (带或不带 data:image/jpeg;base64 前缀) */
   fileBase64?: string;
@@ -69,7 +69,7 @@ interface OcrParseRequest {
 ```json
 {
   "sampleKey": "xuanwu_outpatient",
-  "fileName": "宣武医院神经内科门诊病历_孙桂兰.pdf"
+  "fileName": "示例门诊病历_孙桂兰.pdf"
 }
 ```
 
@@ -79,8 +79,8 @@ interface OcrParseRequest {
   "success": true,
   "jobId": "job_paddlevl_17730998271_9x3a",
   "state": "done",
-  "sourceDocName": "宣武医院神经内科门诊病历_孙桂兰.pdf",
-  "rawMarkdown": "首都医科大学宣武医院 门诊病历记录\n姓名：孙桂兰 性别：女 年龄：69岁...",
+  "sourceDocName": "示例门诊病历_孙桂兰.pdf",
+  "rawMarkdown": "示例门诊病历记录\n姓名：孙桂兰 性别：女 年龄：69岁...",
   "clinicalJson": {
     "demographics": {
       "name": "孙桂兰",
@@ -109,7 +109,7 @@ interface OcrParseRequest {
       "tauPet": 0
     },
     "rawTextExcerpt": "双侧海马萎缩 MTA 2级，APOE ε3/ε4 携带，初步诊断：主观认知下降 (SCD)",
-    "sourceDocName": "宣武医院神经内科门诊病历_孙桂兰.pdf"
+    "sourceDocName": "示例门诊病历_孙桂兰.pdf"
   },
   "confidenceScore": 0.96
 }
@@ -162,7 +162,7 @@ interface OcrParseRequest {
 
 `server/ocrService.ts` 当前保存了文档识别服务配置、返回类型和两份示例文档：
 - `JOB_URL`: `https://paddleocr.aistudio-app.com/api/v2/ocr/jobs`
-- `TOKEN`: `3c0908da25250490257e66b5511fbd634d992fb5`
+- `TOKEN`: 从环境变量 `PADDLE_OCR_TOKEN` 读取（凭据不写入代码或文档）
 - `MODEL`: `PaddleOCR-VL-1.6`
 
 当前能力分为：

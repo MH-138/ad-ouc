@@ -931,7 +931,7 @@ export const PatientPortalPage: React.FC<PatientPortalPageProps> = ({
                       {record.demographics?.name} 的认知健康全套自评档案
                     </h2>
                     <p className="text-xs text-slate-500">
-                      研究编号: {record.subjectNo || record.id} · 宣武医院认知中心健康档案
+                      研究编号: {record.subjectNo || record.id} · 认知中心健康档案
                     </p>
                   </div>
                 </div>
@@ -1115,11 +1115,11 @@ export const PatientPortalPage: React.FC<PatientPortalPageProps> = ({
                 </div>
               )}
 
-              {/* 宣武医院脑健康科普与生活建议 */}
+              {/* 脑健康科普与生活建议 */}
               <div className="space-y-3">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-teal-600" />
-                  <span>宣武医院专家脑健康生活指导</span>
+                  <span>专家脑健康生活指导</span>
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-1">

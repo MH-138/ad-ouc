@@ -36,7 +36,7 @@ export const ReportPage: React.FC<ReportPageProps> = ({
               综合诊断评估与随访决策中心
             </h1>
             <span className="rounded-md bg-teal-50 px-2 py-0.5 text-xs font-bold text-teal-700">
-              宣武医院标准
+              标准
             </span>
           </div>
           <p className="mt-1 text-xs text-slate-500">

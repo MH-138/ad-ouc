@@ -53,10 +53,10 @@ export const SectionDemographicsHistory: React.FC<Props> = ({ record, onChange }
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap gap-4 items-center justify-between">
         <div>
           <div className="text-xs uppercase tracking-wider text-teal-700 font-bold">
-            首都医科大学宣武医院 AD 临床前期 SCD 人群筛查规范 (基线期)
+            AD 临床前期 SCD 人群筛查规范 (基线期)
           </div>
           <h2 className="text-lg font-bold mt-1 text-slate-900">
-            A ~ G: 基本人口学资料、既往史与现病史档案
+            A ~ E: 基本人口学资料、既往史与现病史档案
           </h2>
         </div>
         <div className="flex flex-wrap gap-2 text-xs font-mono">
@@ -806,15 +806,15 @@ export const SectionDemographicsHistory: React.FC<Props> = ({ record, onChange }
         </div>
       </div>
 
-      {/* Part F & G: 现病史与近1年化验检查 (Present Illness & Labs) */}
+      {/* Part D & E: 现病史与近1年化验检查 (Present Illness & Labs) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Present illness */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
           <div className="flex items-center space-x-2 pb-3 border-b border-slate-100">
             <div className="w-7 h-7 rounded bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-sm">
-              F
+              D
             </div>
-            <h3 className="font-bold text-base text-slate-800">F. 主诉与现病史概述</h3>
+            <h3 className="font-bold text-base text-slate-800">D. 主诉与现病史概述</h3>
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">主诉 (Chief Complaint)</label>
@@ -856,14 +856,14 @@ export const SectionDemographicsHistory: React.FC<Props> = ({ record, onChange }
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
           <div className="flex items-center space-x-2 pb-3 border-b border-slate-100">
             <div className="w-7 h-7 rounded bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-sm">
-              G
+              E
             </div>
-            <h3 className="font-bold text-base text-slate-800">G. 近1年内常规化验检查 (排查可逆性病因)</h3>
+            <h3 className="font-bold text-base text-slate-800">E. 近1年内常规化验检查 (排查可逆性病因)</h3>
           </div>
           <p className="text-xs text-slate-500">用于排除甲状腺功能减退、维生素B12/叶酸缺乏、神经梅毒等可逆性认知障碍</p>
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-              <label className="font-medium text-slate-700 block mb-1">G1. 梅毒抗体</label>
+              <label className="font-medium text-slate-700 block mb-1">E1. 梅毒抗体</label>
               <select
                 value={record.labTests.syphilis}
                 onChange={(e) => updateLabs({ syphilis: Number(e.target.value) as any })}
@@ -876,7 +876,7 @@ export const SectionDemographicsHistory: React.FC<Props> = ({ record, onChange }
             </div>
 
             <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-              <label className="font-medium text-slate-700 block mb-1">G2. 同型半胱氨酸 (Hcy)</label>
+              <label className="font-medium text-slate-700 block mb-1">E2. 同型半胱氨酸 (Hcy)</label>
               <select
                 value={record.labTests.homocysteine}
                 onChange={(e) => updateLabs({ homocysteine: Number(e.target.value) as any })}
@@ -889,7 +889,7 @@ export const SectionDemographicsHistory: React.FC<Props> = ({ record, onChange }
             </div>
 
             <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-              <label className="font-medium text-slate-700 block mb-1">G3. 叶酸水平</label>
+              <label className="font-medium text-slate-700 block mb-1">E3. 叶酸水平</label>
               <select
                 value={record.labTests.folateDeficiency}
                 onChange={(e) => updateLabs({ folateDeficiency: Number(e.target.value) as any })}
@@ -902,7 +902,7 @@ export const SectionDemographicsHistory: React.FC<Props> = ({ record, onChange }
             </div>
 
             <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-              <label className="font-medium text-slate-700 block mb-1">G4. 血清维生素 B12</label>
+              <label className="font-medium text-slate-700 block mb-1">E4. 血清维生素 B12</label>
               <select
                 value={record.labTests.vitB12Low}
                 onChange={(e) => updateLabs({ vitB12Low: Number(e.target.value) as any })}
@@ -915,7 +915,7 @@ export const SectionDemographicsHistory: React.FC<Props> = ({ record, onChange }
             </div>
 
             <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-              <label className="font-medium text-slate-700 block mb-1">G5. 甲状腺激素 (TSH/FT3/FT4)</label>
+              <label className="font-medium text-slate-700 block mb-1">E5. 甲状腺激素 (TSH/FT3/FT4)</label>
               <select
                 value={record.labTests.thyroidAbnormal}
                 onChange={(e) => updateLabs({ thyroidAbnormal: Number(e.target.value) as any })}
@@ -928,7 +928,7 @@ export const SectionDemographicsHistory: React.FC<Props> = ({ record, onChange }
             </div>
 
             <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-              <label className="font-medium text-slate-700 block mb-1">G6. 血红蛋白 (贫血指标)</label>
+              <label className="font-medium text-slate-700 block mb-1">E6. 血红蛋白 (贫血指标)</label>
               <select
                 value={record.labTests.hemoglobinLow}
                 onChange={(e) => updateLabs({ hemoglobinLow: Number(e.target.value) as any })}

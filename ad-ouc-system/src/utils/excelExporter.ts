@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import { SubjectRecord } from "../types/assessment";
-import { evaluateCompleteAssessment, calculateCDRWashington } from "./scoringCalculators";
+import { evaluateCompleteAssessment } from "./scoringCalculators";
 
 export interface ExportOptions {
   anonymize?: boolean; // 脱敏处理
@@ -33,7 +33,8 @@ export function anonymizePhone(phone: string): string {
 export function exportRecordToExcel(record: SubjectRecord, options: ExportOptions = {}) {
   const { anonymize = false } = options;
   const summary = evaluateCompleteAssessment(record);
-  const cdrResult = calculateCDRWashington(record.scales.cdr);
+  // 与综合报告页统一口径：CDR 取统一评估结果，完成判定由 isAssessed 统一提供
+  const cdrResult = summary.cdr;
 
   const displayName = anonymize ? anonymizeName(record.demographics?.name) : record.demographics?.name;
   const displayIdCard = anonymize ? anonymizeIdCard(record.demographics?.idCard) : record.demographics?.idCard;
@@ -82,7 +83,7 @@ export function exportRecordToExcel(record: SubjectRecord, options: ExportOption
   const sc = (s: any, value: any) => (unassessed(s) ? "--" : value);
   const warn = (s: any, normal: string, abnormal: string) =>
     unassessed(s) ? "⚪ 未评估" : s.isAbnormal ? `🔴 ${abnormal}` : `🟢 ${normal}`;
-  const cdrUnassessed = !(record.scales?.cdr && Object.values(record.scales.cdr).some((v: any) => v != null));
+  const cdrUnassessed = !summary.cdr?.isAssessed;
 
   const scalesData = [
     ["量表代码", "量表名称", "测试得分", "常模参考界值", "健康状态预警", "靶向评估认知域"],
@@ -113,7 +114,7 @@ export function exportRecordToExcel(record: SubjectRecord, options: ExportOption
     ["医师审核签署状态", record.diagnosis?.approvalStatus === "approved" ? "已签署审核 (正式生效)" : record.diagnosis?.approvalStatus === "pending" ? "待主治医师审核签字" : "待评估 / 未开展"],
     ["诊断依据要点与随访医嘱", record.diagnosis?.notes || "尚未出具详细随访医嘱"],
     ["建议随访周期", record.followUp?.nextVisitDate ? `下次建议随访时间: ${record.followUp.nextVisitDate}` : "建议 6-12 个月进行一次纵向认知随访"],
-    ["主试/签名医生", record.followUp?.evaluatorSignature || record.evaluator || "韩璎教授研究组"],
+    ["主试/签名医生", record.followUp?.evaluatorSignature || record.evaluator || "示例医师（演示）"],
     ["导出时间", new Date().toLocaleString("zh-CN")],
   ];
 
@@ -136,7 +137,7 @@ export function exportRecordToExcel(record: SubjectRecord, options: ExportOption
   // Trigger download
   // BUG-EXPORT-03: 文件名对 Windows 非法字符（\ / : * ? " < > |）做替换，避免脱敏后含 * 等导致 XLSX.writeFile 抛 ENOENT
   const safeFileNamePart = (s: string) => (s || "").replace(/[\\/:*?"<>|]/g, "_");
-  const filename = `宣武医院_SCD认知评定_${safeFileNamePart(displayName || "受试者")}_${safeFileNamePart(record.evalDate || new Date().toISOString().slice(0, 10))}.xlsx`;
+  const filename = `_SCD认知评定_${safeFileNamePart(displayName || "受试者")}_${safeFileNamePart(record.evalDate || new Date().toISOString().slice(0, 10))}.xlsx`;
   XLSX.writeFile(wb, filename);
 }
 
@@ -184,13 +185,13 @@ export function exportCohortToExcel(cohort: SubjectRecord[], options: ExportOpti
 
   const rows = cohort.map((rec) => {
     const sum = evaluateCompleteAssessment(rec);
-    const cdr = calculateCDRWashington(rec.scales.cdr);
+    const cdr = sum.cdr;
     const dName = anonymize ? anonymizeName(rec.demographics?.name) : rec.demographics?.name;
     // BUG-EXPORT-02: 未作答量表在科研数据集中显示 "--" 而非伪造的 0 分
     const un = (s: any) => s && s.isAssessed === false;
     const cval = (s: any, v: any) => (un(s) ? "--" : v);
     const cwarn = (s: any, n: string, a: string) => (un(s) ? "未评估" : s.isAbnormal ? a : n);
-    const cdrUn = !(rec.scales?.cdr && Object.values(rec.scales.cdr).some((v: any) => v != null));
+    const cdrUn = !sum.cdr?.isAssessed;
 
     return [
       rec.subjectNo,
@@ -233,7 +234,7 @@ export function exportCohortToExcel(cohort: SubjectRecord[], options: ExportOpti
   const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
   XLSX.utils.book_append_sheet(wb, ws, "全队列科研数据集");
 
-  const filename = `宣武医院_AD-SCD全队列科研数据集_${cohort.length}例_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const filename = `_AD-SCD全队列科研数据集_${cohort.length}例_${new Date().toISOString().slice(0, 10)}.xlsx`;
   XLSX.writeFile(wb, filename);
 }
 

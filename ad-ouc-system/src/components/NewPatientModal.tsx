@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   X,
   UserPlus,
@@ -11,11 +11,8 @@ import {
   HeartPulse,
   Activity,
   CheckCircle2,
-  FileUp,
   Sparkles,
   Upload,
-  FileText,
-  Camera,
 } from "lucide-react";
 import { SubjectRecord } from "../types/assessment";
 import { createEmptySubjectRecord } from "../utils/initialPatient";
@@ -33,8 +30,6 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
   onCreatePatient,
 }) => {
   const currentYear = 2026;
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   // Form State - Empty defaults, requiring explicit user input
   const [name, setName] = useState("");
   const [idCard, setIdCard] = useState("");
@@ -58,7 +53,6 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
   const [hasDementiaFamily, setHasDementiaFamily] = useState(false);
 
   // OCR Recognition State
-  const [isOcrProcessing, setIsOcrProcessing] = useState(false);
   const [ocrSuccessMsg, setOcrSuccessMsg] = useState<string | null>(null);
 
   // Validation & Loading
@@ -124,134 +118,6 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
     setOcrSuccessMsg(`已成功随机生成合规受试者【${pick.name}】（附合规18位身份证号 ${generatedId}，年龄 ${currentYear - pick.y}岁）！`);
   };
 
-  const applyOcrExtractedData = (
-    data: {
-      name: string;
-      idCard?: string;
-      gender: 1 | 2;
-      birthYear: string;
-      age: string;
-      educationYears: string;
-      phone: string;
-      height: string;
-      weight: string;
-      hasHtn?: boolean;
-      hasDm?: boolean;
-      hasLipid?: boolean;
-    },
-    sourceLabel: string
-  ) => {
-    setErrorMsg(""); // BUG-INTAKE-04: 成功回填前清除旧错误提示，避免与回填成功提示并存
-    setName(data.name);
-    if (data.idCard) setIdCard(data.idCard);
-    setGender(data.gender);
-    setBirthYearStr(data.birthYear);
-    setAgeStr(data.age);
-    setEducationYearsStr(data.educationYears);
-    setPhone(data.phone);
-    setHeightStr(data.height);
-    setWeightStr(data.weight);
-    if (data.hasHtn !== undefined) setHasHtn(data.hasHtn);
-    if (data.hasDm !== undefined) setHasDm(data.hasDm);
-    if (data.hasLipid !== undefined) setHasLipid(data.hasLipid);
-
-    setOcrSuccessMsg(
-      `已通过【${sourceLabel}】智能结构化提取，自动回填姓名、身份证号、年龄、手机号及慢病史。您可继续核对补充！`
-    );
-  };
-
-  const handleSimulateOcr = (type: "id_card" | "clinic_card" | "medical_record") => {
-    setIsOcrProcessing(true);
-    setOcrSuccessMsg(null);
-    setTimeout(() => {
-      if (type === "id_card") {
-        applyOcrExtractedData(
-          {
-            name: "郭秀珍",
-            idCard: "110102195906232547",
-            gender: 2,
-            birthYear: "1959",
-            age: "67",
-            educationYears: "12",
-            phone: "13810293847",
-            height: "163",
-            weight: "59",
-            hasHtn: true,
-            hasDm: false,
-            hasLipid: false,
-          },
-          "居民身份证扫描 (OCR 识别反算)"
-        );
-      } else if (type === "clinic_card") {
-        applyOcrExtractedData(
-          {
-            name: "孙建国",
-            idCard: "110108195803151439",
-            gender: 1,
-            birthYear: "1958",
-            age: "68",
-            educationYears: "12",
-            phone: "13910884562",
-            height: "172",
-            weight: "68",
-            hasHtn: true,
-            hasDm: false,
-            hasLipid: true,
-          },
-          "宣武医院门诊就诊卡"
-        );
-      } else {
-        applyOcrExtractedData(
-          {
-            name: "王玉兰",
-            idCard: "110105196011082563",
-            gender: 2,
-            birthYear: "1960",
-            age: "66",
-            educationYears: "9",
-            phone: "13801239876",
-            height: "160",
-            weight: "56",
-            hasHtn: true,
-            hasDm: true,
-            hasLipid: false,
-          },
-          "门诊病历首页/PDF凭据识别"
-        );
-      }
-      setIsOcrProcessing(false);
-    }, 850);
-  };
-
-  const handleFileUploadOcr = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsOcrProcessing(true);
-    setOcrSuccessMsg(null);
-
-    setTimeout(() => {
-      const baseName = file.name.replace(/\.[^/.]+$/, "");
-      const extractedName =
-        baseName.length >= 2 && baseName.length <= 4 ? baseName : "张德福";
-      applyOcrExtractedData(
-        {
-          name: extractedName,
-          gender: 1,
-          birthYear: "1956",
-          age: "70",
-          educationYears: "16",
-          phone: "13718902345",
-          height: "170",
-          weight: "65",
-          hasHtn: true,
-          hasDm: false,
-          hasLipid: false,
-        },
-        `上传凭证: ${file.name}`
-      );
-      setIsOcrProcessing(false);
-    }, 1000);
-  };
 
   useEffect(() => {
     if (isOpen) {
@@ -449,31 +315,22 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
 
         {/* Modal Body Form */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 text-xs text-slate-700">
-          {/* Hidden File Input for OCR */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,.pdf"
-            onChange={handleFileUploadOcr}
-            className="hidden"
-          />
-
-          {/* Quick OCR Banner */}
-          <div className="rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50/90 via-emerald-50/50 to-cyan-50/80 p-3.5 shadow-2xs space-y-2">
+          {/* Quick Test-Data Helper */}
+          <div className="rounded-2xl border border-purple-200 bg-gradient-to-r from-purple-50/90 via-indigo-50/50 to-violet-50/80 p-3.5 shadow-2xs space-y-2">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
+                <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <div>
                   <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
-                    <span>智能快速建档 (OCR 识别与结构化回填)</span>
-                    <span className="text-[10px] px-2 py-0.2 rounded-full bg-teal-100 text-teal-800 font-semibold border border-teal-200">
-                      支持图片 / PDF / 就诊卡
+                    <span>快速生成测试受试者</span>
+                    <span className="text-[10px] px-2 py-0.2 rounded-full bg-purple-100 text-purple-800 font-semibold border border-purple-200">
+                      演示用 · 含真实 18 位身份证号
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    上传患者就诊卡、身份证或病历首页面，自动解析提取姓名、年龄、电话并填单
+                    一键随机生成一位合规受试者（自动换算年龄、性别与慢病史），便于课堂演示与功能验证
                   </p>
                 </div>
               </div>
@@ -489,54 +346,9 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>⚡ 随机一键生成受试者</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleSimulateOcr("id_card")}
-                  disabled={isOcrProcessing}
-                  className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-purple-700 font-semibold text-[11px] border border-purple-200 transition shadow-2xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                  title="扫描居民二代身份证正反面提取"
-                >
-                  <Camera className="w-3.5 h-3.5 text-purple-600" />
-                  <span>二代身份证识别</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isOcrProcessing}
-                  className="px-2.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-[11px] transition shadow-2xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                >
-                  <FileUp className="w-3.5 h-3.5" />
-                  <span>上传图片/PDF</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSimulateOcr("clinic_card")}
-                  disabled={isOcrProcessing}
-                  className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-semibold text-[11px] border border-slate-200 transition shadow-2xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                  title="点击自动载入就诊卡并结构化提取"
-                >
-                  <Camera className="w-3.5 h-3.5 text-teal-600" />
-                  <span>载入示例就诊卡</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSimulateOcr("medical_record")}
-                  disabled={isOcrProcessing}
-                  className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-semibold text-[11px] border border-slate-200 transition shadow-2xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                  title="点击自动载入病历单并结构化提取"
-                >
-                  <FileText className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>载入示例病历单</span>
-                </button>
               </div>
             </div>
-
-            {isOcrProcessing && (
-              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-teal-100/70 text-teal-800 text-xs font-medium animate-pulse border border-teal-200">
-                <RefreshCw className="w-4 h-4 animate-spin text-teal-600" />
-                <span>正在执行 OCR 结构化文本解析，提取患者姓名、身份证号、年龄、病史中...</span>
-              </div>
-            )}
+          </div>
 
             {ocrSuccessMsg && (
               <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-emerald-100 text-emerald-900 text-xs font-medium border border-emerald-200 animate-fade-in">
@@ -553,7 +365,6 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
                 </button>
               </div>
             )}
-          </div>
 
           {errorMsg && (
             <div className="flex items-center gap-2 rounded-xl bg-rose-50 border border-rose-200 p-3 text-rose-700 font-medium animate-fade-in">

@@ -1,11 +1,16 @@
 /**
  * PaddleOCR-VL-1.6 Integration & Clinical Information Extraction Service
- * Implements the asynchronous PaddleOCR job lifecycle and clinical entity extraction
+ *
+ * [BUG-OCR-01] 真实 PaddleOCR 异步任务（提交 → 轮询 → 下载）尚未接入。
+ * 此前 parseDocumentWithOcr 会无视上传内容、固定返回预设演示病历（孙桂兰等），
+ * 造成「上传任何文件都回显同一份假病历」的误导。现已彻底移除该假解析逻辑，
+ * 避免课堂演示中出现伪造的 OCR 结果。
+ *
+ * 真实接入时：在下方补充 submitJob / pollJob / downloadResult，
+ * 并让 server.ts 的 /api/ai/parse-medical-record 在配置 GEMINI_API_KEY 时调用之；
+ * 当前未接入时，前端应引导用户改用「粘贴病历文本」走规则回退解析（parseMedicalRecordFallback）。
  */
 
-// [BUG-OCR-01] 原 TOKEN 硬编码在源码中（第二个泄露的敏感凭证，BUG-SECURITY-01 仅覆盖了 turso.ts）。
-// 现改为从环境变量读取；PaddleOCR 异步任务（提交→轮询→下载）当前未真正接入，
-// 故 JOB_URL/TOKEN/MODEL 仅作配置占位，实际解析逻辑见下方 parseDocumentWithOcr 的演示实现。
 export const PADDLE_OCR_CONFIG = {
   JOB_URL: process.env.PADDLE_OCR_JOB_URL || "https://paddleocr.aistudio-app.com/api/v2/ocr/jobs",
   TOKEN: process.env.PADDLE_OCR_TOKEN || "", // 真实接入 PaddleOCR 时从 .env 读取，绝不硬编码
@@ -44,123 +49,4 @@ export interface ExtractedClinicalData {
   };
   rawTextExcerpt: string;
   sourceDocName: string;
-}
-
-// Preset standard mock clinical case documents
-export const SAMPLE_DOCUMENTS: Record<string, { title: string; text: string; parsed: ExtractedClinicalData }> = {
-  xuanwu_outpatient: {
-    title: "首都医科大学宣武医院 神经内科门诊病历（主观认知下降）",
-    text: `首都医科大学宣武医院 门诊病历记录
-姓名：孙桂兰    性别：女    年龄：69岁    文化程度：大专（12年）
-门诊号：XW2026-0948    联系电话：13910827361
-主诉：记忆力进行性减退1年半，伴丢三落四。
-现病史：患者近1年半前无明显诱因出现记忆力下降，主观感觉自己较同龄人记忆力显著变差，经常遗忘钥匙、老花镜存放位置，买菜常算不清零钱，偶有叫不出老邻居姓名。日常家务可基本独立完成，无幻觉妄想，情绪平稳。
-既往史：高血压病史8年，长期口服氨氯地平，血压控制平稳；无糖尿病、脑卒中及冠心病病史。母亲生前有可疑老年痴呆病史。
-辅助检查：
-头颅高分辨率 MRI：双侧海马体积对称性轻度变小，Scheltens 内侧颞叶萎缩 (MTA) 分级：左侧 2 级，右侧 2 级。侧脑室旁可见散在缺血性白质高信号 (Fazekas 1 级)。
-APOE 基因分型：ε3/ε4（携带 1 个 ε4 等位基因）。
-初步诊断：主观认知下降 (SCD)，高度警惕阿尔茨海默病临床前期。`,
-    parsed: {
-      demographics: {
-        name: "孙桂兰",
-        gender: 2,
-        age: 69,
-        educationYears: 12,
-        phone1: "13910827361",
-        height: 160,
-        weight: 58,
-      },
-      history: {
-        chiefComplaint: "记忆力进行性减退1年半，主观记忆下降明显，伴钥匙遗失与找词困难",
-        hypertension: true,
-        diabetes: false,
-        coronaryHeartDisease: false,
-        stroke: false,
-        familyHistory: true,
-      },
-      biomarkers: {
-        mriAtrophy: true,
-        mriDescription: "双侧海马体积对称性轻度变小，MTA分级2级；Fazekas 1级脑白质病变",
-        apoe4: 1, // 携带 ε3/ε4
-        abetaPet: 1, // 考虑高危提示
-        tauPet: 0,
-      },
-      rawTextExcerpt: "双侧海马萎缩 MTA 2级，APOE ε3/ε4 携带，初步诊断：主观认知下降 (SCD)",
-      sourceDocName: "宣武医院神经内科门诊病历_孙桂兰.pdf",
-    },
-  },
-  mri_report: {
-    title: "宣武医院 磁共振(MRI)诊断报告单（认知障碍专病）",
-    text: `首都医科大学宣武医院 影像诊断报告书
-姓名：王建国    性别：男    年龄：73岁    住院号：ZY-883921
-检查项目：头颅高分辨率 3D-T1 BRAVO + T2-FLAIR 轴位
-影像学表现：
-1. 双侧海马结构轮廓变细，脉络膜裂增宽，左侧 MTA 评级 2 级，右侧 MTA 评级 2 级。
-2. 额叶、颞叶皮层轻度脑沟增宽，脑回变薄。
-3. 脑白质区无明显急性脑梗死及脑出血灶。
-4. 脑小血管病表现轻度。
-结论：海马萎缩 (MTA 2级)，符合认知障碍/阿尔茨海默病病理演变影像特征，建议结合神经心理学量表随访。`,
-    parsed: {
-      demographics: {
-        name: "王建国",
-        gender: 1,
-        age: 73,
-        educationYears: 9,
-        phone1: "13801239876",
-        height: 172,
-        weight: 68,
-      },
-      history: {
-        chiefComplaint: "头颅MRI影像提示海马萎缩 (MTA 2级)，主诉近事遗忘加重",
-        hypertension: false,
-        diabetes: false,
-        coronaryHeartDisease: false,
-        stroke: false,
-        familyHistory: false,
-      },
-      biomarkers: {
-        mriAtrophy: true,
-        mriDescription: "双侧海马结构轮廓变细，脉络膜裂增宽，双侧 MTA 2级，额颞叶轻度萎缩",
-        apoe4: 0,
-        abetaPet: 0,
-        tauPet: 0,
-      },
-      rawTextExcerpt: "双侧海马萎缩 MTA 2级，脉络膜裂增宽，符合阿尔茨海默病病理演变影像特征",
-      sourceDocName: "宣武医院头颅MRI报告_王建国.jpg",
-    },
-  },
-};
-
-/**
- * Parses OCR raw text or simulates PaddleOCR pipeline
- */
-export async function parseDocumentWithOcr(sampleKey?: string, uploadedFileName?: string): Promise<{
-  jobId: string;
-  state: "done";
-  isDemo: boolean;
-  sourceDocName: string;
-  rawMarkdown: string;
-  clinicalJson: ExtractedClinicalData;
-}> {
-  const sample = SAMPLE_DOCUMENTS[sampleKey || "xuanwu_outpatient"] || SAMPLE_DOCUMENTS.xuanwu_outpatient;
-  const jobId = `job_paddlevl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-
-  // [BUG-OCR-01] 真实 PaddleOCR 异步任务尚未接入，当前 parseDocumentWithOcr 仅返回预设演示样本
-  // （默认孙桂兰门诊病历），与实际上传内容无关。明确标记 isDemo=true，使前端在回填前可提示"演示数据"，
-  // 避免医生误将固定假数据当作真实病历解析结果写入档案（P3 §9 亦要求医生确认后方可写入）。
-  console.warn(
-    "[OCR] parseDocumentWithOcr 当前返回预设演示数据（非真实解析结果）；真实 PaddleOCR 异步任务待实现。"
-  );
-
-  return {
-    jobId,
-    state: "done",
-    isDemo: true,
-    sourceDocName: uploadedFileName || sample.parsed.sourceDocName,
-    rawMarkdown: sample.text,
-    clinicalJson: {
-      ...sample.parsed,
-      sourceDocName: uploadedFileName || sample.parsed.sourceDocName,
-    },
-  };
 }

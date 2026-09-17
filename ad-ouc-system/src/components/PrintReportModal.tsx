@@ -1,11 +1,7 @@
 import React, { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { SubjectRecord } from "../types/assessment";
-import {
-  evaluateCompleteAssessment,
-  calculateGlobalCDR,
-  calculateADASCog,
-} from "../utils/scoringCalculators";
+import { evaluateCompleteAssessment } from "../utils/scoringCalculators";
 import { Printer, X, FileText, CheckCircle2 } from "lucide-react";
 
 interface Props {
@@ -26,8 +22,11 @@ export const PrintReportModal: React.FC<Props> = ({ isOpen, onClose, record }) =
   if (!isOpen) return null;
 
   const results = evaluateCompleteAssessment(record);
-  const cdr = calculateGlobalCDR(record.scales.cdr);
-  const adas = calculateADASCog(record.scales.adasCog);
+  // BUG-FIX: 与综合报告页统一口径，改用统一评估的 adasCog / cdr。
+  // 原先 hasAdas 只判 Object.keys(...).length > 0，遇到字段被初始化为 0 的档案会误判为已评估；
+  // hasCdr 同理无法区分"六域全填 0（真实 CDR 0 级）"与"空对象（未评定）"。
+  const cdr = results.cdr;
+  const adas = results.adasCog;
   const hasAvlt = [
     record.scales.avltH.n1Words,
     record.scales.avltH.n2Words,
@@ -45,8 +44,8 @@ export const PrintReportModal: React.FC<Props> = ({ isOpen, onClose, record }) =
   const hasMes = Object.values(record.scales.mes).some(
     (value) => typeof value === "number" && value > 0,
   );
-  const hasAdas = Object.keys(record.scales.adasCog).length > 0;
-  const hasCdr = Object.keys(record.scales.cdr).length > 0;
+  const hasAdas = Boolean(adas?.isAssessed);
+  const hasCdr = Boolean(cdr?.isAssessed);
   const hasFaq = Object.keys(record.scales.faq.items).length > 0;
   const hasGds = Object.keys(record.scales.gds15.answers).length > 0;
   const hasPsqi =
@@ -64,7 +63,7 @@ export const PrintReportModal: React.FC<Props> = ({ isOpen, onClose, record }) =
         <div className="p-3.5 px-6 bg-slate-50 text-slate-800 border-b border-slate-200 flex items-center justify-between print:hidden">
           <div className="flex items-center space-x-2">
             <FileText className="w-4 h-4 text-teal-700" />
-            <span className="font-bold text-sm text-slate-900">宣武医院 AD-SCD 临床科研评估报告（打印/导出预览）</span>
+            <span className="font-bold text-sm text-slate-900">认知障碍临床数据采集系统课程作业 临床科研评估报告（打印/导出预览）</span>
           </div>
 
           <div className="flex items-center space-x-2">
@@ -89,7 +88,7 @@ export const PrintReportModal: React.FC<Props> = ({ isOpen, onClose, record }) =
           {/* Header */}
           <div className="text-center border-b-2 border-slate-900 pb-4">
             <div className="text-xs uppercase tracking-widest font-bold text-slate-600">
-              首都医科大学宣武医院 · 国家神经疾病医学中心
+              认知障碍临床数据采集系统课程作业
             </div>
             <h1 className="text-2xl font-bold text-slate-950 mt-1">
               阿尔茨海默病主观认知下降 (AD-SCD) 多模态临床神经心理评估报告
@@ -278,7 +277,7 @@ export const PrintReportModal: React.FC<Props> = ({ isOpen, onClose, record }) =
             <div className="flex justify-between items-end pt-8 border-t border-slate-300 text-xs">
               <div>
                 <div><strong>下次随访约定日期：</strong>{record.followUp.nextVisitDate || "12个月后"}</div>
-                <div className="text-slate-500 mt-0.5">随访机构：首都医科大学宣武医院 神经疾病高精尖创新中心</div>
+                <div className="text-slate-500 mt-0.5">随访机构：认知障碍临床数据采集系统课程作业 神经疾病高精尖创新中心</div>
               </div>
               <div className="space-y-1 text-right">
                 <div><strong>主试评估医师签名：</strong> <span className="font-serif italic text-base underline underline-offset-4 ml-2">{record.followUp.evaluatorSignature || record.evaluator}</span></div>

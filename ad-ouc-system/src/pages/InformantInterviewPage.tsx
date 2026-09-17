@@ -806,7 +806,7 @@ export const InformantInterviewPage: React.FC<InformantInterviewPageProps> = ({
                     <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-1">
                       <div className="font-bold text-slate-800">定期神经心理随访复查</div>
                       <p className="text-slate-500 leading-relaxed">
-                        建议遵医嘱在 {record.followUp?.nextVisitDate || "6至12个月"} 后前往宣武医院认知中心门诊复查量表及头颅影像。
+                        建议遵医嘱在 {record.followUp?.nextVisitDate || "6至12个月"} 后前往认知中心门诊复查量表及头颅影像。
                       </p>
                     </div>
                   </div>

@@ -11,7 +11,7 @@
 |---|---|---|
 | **1. 三端业务彻底解耦与闭环** | 彻底拆分受试者端、家属端、医生工作台三大通道。受试者端自评（SCD-Q9跳过不记0分）；家属端绑定受试者并隔离填写FAQ/CDR；医生端初始患者为null，设置受试者工作区守卫，杜绝未选人乱填。彻底移除前端切换角色按钮。 | `src/App.tsx`<br>`src/components/AppLayout.tsx`<br>`src/pages/InformantInterviewPage.tsx`<br>`src/pages/PatientPortalPage.tsx` |
 | **2. 云端数据库设计与实现** | 接入 Turso LibSQL 云端关系型数据库，建立 4 张核心数据表（`patients` 主档案、`assessments` 测评明细、`drafts` 多流草稿、`ai_consultations` 研判审核）。草稿采用 `(patient_id, role, flow_id)` 联合主键，彻底解决同角色多流程覆盖。 | `server/turso.ts`<br>`server.ts`<br>`src/services/tursoApi.ts` |
-| **3. 全套神经心理量表与算法** | 严格按宣武医院及多中心认知障碍标准实现全套量表：MMSE（30分）、MoCA-B（30分）、AVLT-H、STT连线、CDR（华盛顿大学分级算法与总分计算）、FAQ、NPI、PSQI、HAMD-17、HAMA等。未作答状态显示为空，绝不记为0分。 | `src/pages/*`<br>`src/utils/scoringCalculators.ts`<br>`src/utils/prototypeScales.ts` |
+| **3. 全套神经心理量表与算法** | 严格按多中心认知障碍临床标准实现全套量表：MMSE（30分）、MoCA-B（30分）、AVLT-H、STT连线、CDR（华盛顿大学分级算法与总分计算）、FAQ、NPI、PSQI、HAMD-17、HAMA等。未作答状态显示为空，绝不记为0分。 | `src/pages/*`<br>`src/utils/scoringCalculators.ts`<br>`src/utils/prototypeScales.ts` |
 | **4. 医疗多模态与 AI 审核闭环** | ① **门诊病历 OCR 结构化提取**：支持病历图像/PDF/文本解析并一键回填档案。<br>② **神经心理绘图智能打分**：双五边形交叉、CDT 钟表描画、立方体仿画的形态分析与自动评分。<br>③ **AI 临床综合研判**：AI 生成三段式诊断意见 -> 待审核队列 -> 医生签字确认写入正式诊断。 | `src/components/MedicalRecordUploadModal.tsx`<br>`src/components/DoctorApprovalModal.tsx`<br>`src/components/AiAnalysisModal.tsx`<br>`server/ocrService.ts` |
 | **5. 完整技术文档与数据契约** | 撰写完备的文档体系：三端业务流程定稿、16个API接口与数据表定义文档、历史阶段日志与留痕记录、测试差距清单与代码保护红线。 | `ad-ouc-system/*.md` |
 | **6. 工程质量与环境规范** | TypeScript 严格类型检查 **0 错误**（`npm run lint` 通过）；Vite 生产打包构建成功（`npm run build`）；配置完整 `.gitignore`，零污染保护历史原型。 | `package.json`<br>`tsconfig.json`<br>`vite.config.ts` |

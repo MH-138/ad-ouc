@@ -38,7 +38,7 @@ export const UserGuideModal: React.FC<Props> = ({ isOpen, onClose }) => {
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-900 flex items-center space-x-2">
-                <span>宣武医院 AD-SCD 认知评定工作台 · 临床使用手册</span>
+                <span>认知障碍临床数据采集系统课程作业 · 临床使用手册</span>
                 <span className="text-xs bg-teal-50 text-teal-800 px-2.5 py-0.5 rounded-full font-bold border border-teal-200">
                   v2.0 规范版
                 </span>
@@ -146,7 +146,7 @@ export const UserGuideModal: React.FC<Props> = ({ isOpen, onClose }) => {
           {activeSection === "workflow" && (
             <div className="space-y-5 animate-fade-in">
               <h4 className="font-bold text-slate-900 text-base">
-                临床测评五步标准化流程（宣武工作法）
+                临床测评五步标准化流程
               </h4>
 
               <div className="space-y-3 text-xs">
@@ -300,7 +300,7 @@ export const UserGuideModal: React.FC<Props> = ({ isOpen, onClose }) => {
           {activeSection === "norms" && (
             <div className="space-y-4 animate-fade-in text-xs">
               <h4 className="font-bold text-slate-900 text-base">
-                宣武医院中国老年人群常模与判定原则
+                中国老年人群常模与判定原则
               </h4>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -374,7 +374,7 @@ export const UserGuideModal: React.FC<Props> = ({ isOpen, onClose }) => {
         {/* Footer */}
         <div className="bg-slate-50 px-6 py-3.5 border-t border-slate-200 flex items-center justify-between">
           <span className="text-xs text-slate-500 font-mono">
-            宣武医院认知障碍多中心科研协作组 · Xuanwu AD-SCD Workstation
+            认知障碍临床数据采集系统课程作业 科研协作组
           </span>
           <button
             onClick={onClose}

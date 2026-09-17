@@ -113,10 +113,10 @@ export const CHAT_NODES: Record<string, ChatNode> = {
     speaker: "ai",
     targetRole: ["patient", "examiner", "informant"],
     title: "基本信息登记",
-    promptPatient: "您好！欢迎参加宣武医院认知健康随访。接下来请如实填写基本信息。",
-    promptInformant: "您好！欢迎协助填写宣武医院认知健康随访资料。",
+    promptPatient: "您好！欢迎参加认知健康随访。接下来请如实填写基本信息。",
+    promptInformant: "您好！欢迎协助填写认知健康随访资料。",
     promptExaminer: "开始受试者基线资料录入。",
-    speechText: "您好！欢迎参加宣武医院认知健康随访。接下来请如实填写基本信息。",
+    speechText: "您好！欢迎参加认知健康随访。接下来请如实填写基本信息。",
     inputType: "buttons",
     options: [
       { label: "开始登记个人信息", value: "start", color: "emerald", icon: "Check" },

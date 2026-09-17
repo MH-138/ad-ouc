@@ -85,7 +85,7 @@ export const PrototypeAssessmentEngine: React.FC<PrototypeAssessmentEngineProps>
   // Turso DB Cloud sync status
   const [dbStatus, setDbStatus] = useState<TursoDbStatus>({
     connected: true,
-    url: "libsql://ad-ouc-mh-138.aws-ap-northeast-1.turso.io",
+    url: "",
     timestamp: new Date().toISOString(),
   });
   const [saveStatus, setSaveStatus] = useState<string>("已保存");
@@ -1030,7 +1030,7 @@ export const PrototypeAssessmentEngine: React.FC<PrototypeAssessmentEngineProps>
             <div>
               <div className="font-bold text-sm flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-amber-400" />
-                <span>宣武医院深度科研工作台（ATN生物标志物、ADAS-Cog、纵向随访）</span>
+                <span>认知障碍临床数据采集系统课程作业（ATN生物标志物、ADAS-Cog、纵向随访）</span>
               </div>
               <p className="text-xs text-slate-300 mt-0.5">
                 如需录入 MRI 海马体积、PET SUVr、脑脊液 Aβ42/p-Tau 或进行神经心理深度分析
@@ -1161,7 +1161,7 @@ export const PrototypeAssessmentEngine: React.FC<PrototypeAssessmentEngineProps>
                 <div>
                   <strong>编号：</strong> {currentRecord.subjectNo} · <strong>中心：</strong>{" "}
                   {currentRecord.centerNo} · <strong>评估人：</strong>{" "}
-                  {currentRecord.evaluator || "韩璎教授团队"}
+                  {currentRecord.evaluator || "示例医师（演示）"}
                 </div>
               </div>
 

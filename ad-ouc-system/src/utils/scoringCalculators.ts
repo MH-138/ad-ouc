@@ -100,6 +100,10 @@ export function calculateAVLTH(
     isDelayAbnormal,
     isN5Abnormal: isDelayAbnormal,
     isRecognitionAbnormal,
+    // BUG-FIX: 旧实现没有 isAbnormal 字段，而导出层（excelExporter）的红/绿灯只读
+    // isAbnormal，导致 AVLT 长延迟回忆与再认两行恒为"正常"（假阴性）。
+    // 长延迟回忆下降与再认受损是 AD 最核心的两项指标，此处必须汇总暴露。
+    isAbnormal: isDelayAbnormal || isRecognitionAbnormal,
   };
 }
 
@@ -220,6 +224,8 @@ export function calculateSTT(
     isSTTBAbnormal,
     isAAbnormal: isSTTAAbnormal,
     isBAbnormal: isSTTBAbnormal,
+    // BUG-FIX: 同 AVLT——A/B 任一受损即汇总为 isAbnormal，供导出层判定红/绿灯。
+    isAbnormal: isSTTAAbnormal || isSTTBAbnormal,
   };
 }
 
@@ -601,6 +607,9 @@ export function calculateADASCog(adas: SubjectRecord["scales"]["adasCog"]) {
         10
     ) / 10;
 
+  // BUG-FIX: 原先把 concentrationDifficulty（注意力）也计入总分，共 12 项、满分 75，
+  // 但页面上写的是 "/ 70 分"，且导出结果要与 ADAS-Cog 常模比较。
+  // 标准 ADAS-Cog-11 共 11 项、满分 70，注意力属于扩展项，单独输出、不计入总分。
   const totalScore =
     recallAvg +
     (adas?.namingErrors || 0) +
@@ -612,8 +621,7 @@ export function calculateADASCog(adas: SubjectRecord["scales"]["adasCog"]) {
     (adas?.rememberingInstructions || 0) +
     (adas?.spokenLanguageAbility || 0) +
     (adas?.wordFindingDifficulty || 0) +
-    (adas?.comprehensionDifficulty || 0) +
-    (adas?.concentrationDifficulty || 0);
+    (adas?.comprehensionDifficulty || 0);
 
   const rounded = Math.round(totalScore * 10) / 10;
   let severity = "认知功能基本正常 (≤10分)";
@@ -630,10 +638,14 @@ export function calculateADASCog(adas: SubjectRecord["scales"]["adasCog"]) {
     recognitionAvg,
     totalScore: rounded,
     severity,
+    // 扩展项（注意力），单独暴露供明细展示，不计入 70 分总分
+    concentrationDifficulty: adas?.concentrationDifficulty || 0,
+    // ≥11 分即进入"轻度认知功能损害"区间，作为导出层红/绿灯依据
+    isAbnormal: rounded >= 11,
   };
 }
 
-// 18. Global CDR Algorithm Engine (Washington University / Xuanwu Protocol)
+// 18. Global CDR Algorithm Engine (Washington University Protocol)
 export function calculateGlobalCDR(cdr: SubjectRecord["scales"]["cdr"]) {
   const M = cdr?.memory ?? 0;
   const secondaries = [
@@ -716,6 +728,10 @@ export function calculateGlobalCDR(cdr: SubjectRecord["scales"]["cdr"]) {
     cdrSumOfBoxes: sumOfBoxes,
     sumOfBoxes,
     description,
+    // BUG-FIX: 原实现没有 isAbnormal，且空的 cdr（{} as any）会被算出 globalCDR=0
+    // 并显示"健康/正常"——未评定被当成正常结论。此处补齐判定字段，
+    // 由 evaluateCompleteAssessment 的 markAssessed 在未评定时统一压成 false。
+    isAbnormal: globalCDR > 0,
   };
 }
 
@@ -740,12 +756,28 @@ export function calculateSCDQ9(scd: SubjectRecord["scdQ9"]) {
 
 // 20. Comprehensive Overall Evaluation
 // BUG-EXPORT-02: 空白保护辅助——判断量表输入是否真实作答（避免空对象被算成 0 分亮灯）
+//
+// 旧实现：`Object.values(input).some((v) => v != null && Number(v) !== 0)`
+// 缺陷：对对象/枚举字符串调用 Number() 会得到 NaN，而 NaN !== 0 恒为 true，
+// 于是"空量表"被误判为已作答——例如 bnt:{items:{}}（值是空对象）、
+// vft:{category:"animal", t1_15s:0 ...}（category 是固定枚举，不是作答内容）、
+// avltH.n6CategoryCued（嵌套对象）。误判后 0 分被当成真实成绩，报告与导出层亮红灯（假阳性）。
+// 现改为按叶子节点的实际类型递归判定：数值看是否非 0，数组看长度，布尔视为已勾选，
+// 字符串必须能解析成非 0 数字（用于排除 category 这类固定枚举字段）。
 function scaleAnswered(input: any): boolean {
-  return (
-    input != null &&
-    typeof input === "object" &&
-    Object.values(input).some((v) => v != null && Number(v) !== 0)
-  );
+  if (input == null) return false;
+  if (Array.isArray(input)) return input.some((v) => v != null && v !== "");
+  if (typeof input !== "object") return false;
+
+  return Object.values(input).some((v) => {
+    if (v == null || v === "") return false;
+    if (Array.isArray(v)) return v.length > 0;
+    if (typeof v === "object") return scaleAnswered(v);
+    if (typeof v === "number") return !Number.isNaN(v) && v !== 0;
+    if (typeof v === "boolean") return true;
+    const n = Number(v);
+    return !Number.isNaN(n) && n !== 0;
+  });
 }
 
 // 未作答量表的标记包装：isAssessed=false 且强制 isAbnormal=false，防止导出层误报红/绿灯
@@ -755,6 +787,24 @@ function markAssessed(result: any, assessed: boolean): any {
     isAssessed: assessed,
     isAbnormal: assessed ? (result.isAbnormal ?? false) : false,
   };
+}
+
+// CDR 的"是否完成"不能用 scaleAnswered：六个域全填 0 是真实结果（CDR 0 级，健康受试者），
+// 而新建档案的 cdr 是空对象 {}。两者必须区分，否则要么把 CDR 0 误判成未评定，
+// 要么把未评定误判成 CDR 0（后者正是"空档案显示符合 SCD 核心准则"的成因）。
+const CDR_DOMAIN_KEYS = [
+  "memory",
+  "orientation",
+  "judgment",
+  "community",
+  "homeHobbies",
+  "personalCare",
+] as const;
+
+function cdrAnswered(cdr: unknown): boolean {
+  if (cdr == null) return false;
+  const source = cdr as Record<string, unknown>;
+  return CDR_DOMAIN_KEYS.every((key) => source[key] != null);
 }
 
 export function evaluateCompleteAssessment(record: SubjectRecord): AssessmentSummaryResults {
@@ -782,5 +832,16 @@ export function evaluateCompleteAssessment(record: SubjectRecord): AssessmentSum
     rbdsq: markAssessed(calculateRBDSQ(scales.rbdsq?.items || {}), scaleAnswered(scales.rbdsq?.items)),
     ess: markAssessed(calculateESS(scales.ess?.items || {}), scaleAnswered(scales.ess?.items)),
     npi: markAssessed(calculateNPI(scales.npi?.items || {}), scaleAnswered(scales.npi?.items)),
+    // BUG-FIX: 原先 adasCog 与 cdr 没有纳入统一评估，报告页各自直接调用计算函数且
+    // 没有"是否完成"判定，导致空白档案显示 CDR 0 级 / ADAS-Cog 0 分并给出
+    // "符合 SCD 核心准则""认知功能基本正常"的结论（假阴性）。现纳入 markAssessed。
+    adasCog: markAssessed(
+      calculateADASCog(scales.adasCog ?? ({} as SubjectRecord["scales"]["adasCog"])),
+      scaleAnswered(scales.adasCog)
+    ),
+    cdr: markAssessed(
+      calculateGlobalCDR(scales.cdr ?? ({} as SubjectRecord["scales"]["cdr"])),
+      cdrAnswered(scales.cdr)
+    ),
   } as AssessmentSummaryResults;
 }

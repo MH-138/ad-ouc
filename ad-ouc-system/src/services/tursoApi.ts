@@ -59,14 +59,14 @@ export const tursoApi = {
       }
       return {
         connected: false,
-        url: "libsql://ad-ouc-mh-138.aws-ap-northeast-1.turso.io",
+        url: "",
         error: json.error || "Status check failed",
         timestamp: new Date().toISOString(),
       };
     } catch (e: any) {
       return {
         connected: false,
-        url: "libsql://ad-ouc-mh-138.aws-ap-northeast-1.turso.io",
+        url: "",
         error: e?.message || "Network error",
         timestamp: new Date().toISOString(),
       };
@@ -271,17 +271,4 @@ export const tursoApi = {
     }
   },
 
-  // Document parsing API
-  async parseOcrRecord(sampleKey?: string, fileName?: string): Promise<any> {
-    try {
-      const res = await fetch("/api/v1/ocr/parse-record", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sampleKey, fileName }),
-      });
-      return await res.json();
-    } catch (e: any) {
-      return { success: false, error: e?.message };
-    }
-  },
 };

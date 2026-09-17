@@ -777,7 +777,7 @@ export async function cleanAndSeedStandardCohort() {
           birthDate: "1955-08-12",
           educationYears: 12,
           phone1: "13801015678",
-          address: "北京市西城区宣武门内大街",
+          address: "北京市西城区示例大街",
         },
         scdQ9: { q1: 1, q2: 1, q3: 1, q4: 0.5, q5: 0.5, q6: 1, q7: 0.5, q8: 1, q9: 0.5 },
         scales: {
@@ -787,14 +787,14 @@ export async function cleanAndSeedStandardCohort() {
         },
         diagnosis: {
           category: 1,
-          notes: "【宣武医院神经内科临床诊断与随访医嘱】\n临床诊断：主观认知下降 (Subjective Cognitive Decline, SCD)\n评定依据：受试者存在主观记忆减退主诉且自感担忧（SCD-Q9评分为7分），客观认知量表测试 MMSE 28分、MoCA-B 26分，全球 CDR=0分，知情者 FAQ 0分，日常生活自理能力完整。\n随访医嘱：\n1. 纳入宣武医院多中心 SCD 早期干预随访队列，预约 12 个月后复查。\n2. 执行地中海膳食与有氧步行锻炼处方。\n3. 控制血压与代谢危险因素，定期检测血浆 p-tau217 与睡眠质量。",
-          evaluatorSignature: "韩璎 教授 / 主任医师",
+          notes: "【神经内科临床诊断与随访医嘱】\n临床诊断：主观认知下降 (Subjective Cognitive Decline, SCD)\n评定依据：受试者存在主观记忆减退主诉且自感担忧（SCD-Q9评分为7分），客观认知量表测试 MMSE 28分、MoCA-B 26分，全球 CDR=0分，知情者 FAQ 0分，日常生活自理能力完整。\n随访医嘱：\n1. 纳入多中心 SCD 早期干预随访队列，预约 12 个月后复查。\n2. 执行地中海膳食与有氧步行锻炼处方。\n3. 控制血压与代谢危险因素，定期检测血浆 p-tau217 与睡眠质量。",
+          evaluatorSignature: "示例医师（演示）",
           approvedAt: "2026-09-08T09:30:00.000Z",
           approvalStatus: "approved",
         },
         followUp: {
           nextVisitDate: "2027-09-08",
-          evaluatorSignature: "韩璎 教授 / 主任医师",
+          evaluatorSignature: "示例医师（演示）",
           signDate: "2026-09-08",
         },
       },
@@ -969,7 +969,7 @@ export async function cleanAndSeedStandardCohort() {
     suggestedCategory: 1,
     confidence: 0.92,
     summary: "受试者 李淑芬 (女, 68岁) 自评 SCD-Q9 评分为 6/9 分，主诉近 1 年半记忆力持续减退且有担忧情绪；知情者 FAQ 0分，日常生活完全独立，符合 Jessen 2014 标准主观认知下降早期特征。",
-    reportText: "【宣武医院认知障碍多模态智能临床研判报告】\n受试者编号：SCD-2026-002   受试者姓名：李淑芬   性别：女   年龄：68岁   文化程度：9年\n一、临床综合分型研判：\n【主观认知下降 (Subjective Cognitive Decline, SCD 典型期)】\n推荐临床诊断编码：SCD (Category 1)    综合研判置信度：92%\n\n二、多维临床依据与自评特征：\n1. 主观记忆自评：SCD-Q9 自评分数 6/9 分，伴近事遗忘与明显担忧，符合 Jessen 等 SCD-plus 高危主诉标准。\n2. 心理与情绪自评：GDS-15 评分 4/15 分，处于轻度情绪波动范围；PSQI 睡眠障碍指数 5 分。\n\n三、专家处理与随访建议：\n1. 纳入宣武医院多中心 SCD 科研队列，建立 12 个月纵向追踪档案。\n2. 建议由主治医师完成客观神经心理量表测试（MMSE、MoCA-B）并签署电子签名。\n（本建议已实时推送至主治医师工作站待办队列，经医生电子签字后正式生效）",
+    reportText: "【认知障碍多模态智能临床研判报告】\n受试者编号：SCD-2026-002   受试者姓名：李淑芬   性别：女   年龄：68岁   文化程度：9年\n一、临床综合分型研判：\n【主观认知下降 (Subjective Cognitive Decline, SCD 典型期)】\n推荐临床诊断编码：SCD (Category 1)    综合研判置信度：92%\n\n二、多维临床依据与自评特征：\n1. 主观记忆自评：SCD-Q9 自评分数 6/9 分，伴近事遗忘与明显担忧，符合 Jessen 等 SCD-plus 高危主诉标准。\n2. 心理与情绪自评：GDS-15 评分 4/15 分，处于轻度情绪波动范围；PSQI 睡眠障碍指数 5 分。\n\n三、专家处理与随访建议：\n1. 纳入多中心 SCD 科研队列，建立 12 个月纵向追踪档案。\n2. 建议由主治医师完成客观神经心理量表测试（MMSE、MoCA-B）并签署电子签名。\n（本建议已实时推送至主治医师工作站待办队列，经医生电子签字后正式生效）",
     version: 1,
     versionHistory: [] as any[],
   };

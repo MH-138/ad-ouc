@@ -32,7 +32,7 @@ import {
   TopicInfo,
 } from "../../utils/chatDecisionTree";
 import { tts } from "../../utils/ttsHelper";
-import { evaluateCompleteAssessment, calculateCDRWashington } from "../../utils/scoringCalculators";
+import { evaluateCompleteAssessment } from "../../utils/scoringCalculators";
 import { exportRecordToExcel } from "../../utils/excelExporter";
 
 interface ChatInterviewViewProps {
@@ -141,7 +141,6 @@ export const ChatInterviewView: React.FC<ChatInterviewViewProps> = ({
 
   const currentNode = CHAT_NODES[currentNodeId] || CHAT_NODES["node_welcome"];
   const summary = evaluateCompleteAssessment(currentRecord);
-  const cdrResult = calculateCDRWashington(currentRecord.scales.cdr);
 
   function getPromptForRole(node: ChatNode, currentRole: RoleType | string = "examiner") {
     if (currentRole === "informant") return node.promptInformant || node.promptPatient;

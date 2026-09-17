@@ -50,7 +50,7 @@ not_started | in_progress | completed | skipped
   "fileBase64": "data:image/jpeg;base64,...", // 可选：用户上传的图片 Base64 编码
   "mimeType": "image/jpeg",                   // 可选：文件类型
   "rawText": "患者姓名：孙桂兰，女，69岁...",    // 可选：直接粘贴的纯文本病历
-  "fileName": "宣武医院门诊病历_孙桂兰.pdf"
+  "fileName": "示例门诊病历_孙桂兰.pdf"
 }
 ```
 

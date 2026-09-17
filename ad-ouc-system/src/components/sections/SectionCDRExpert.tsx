@@ -38,7 +38,7 @@ export const SectionCDRExpert: React.FC<Props> = ({ record, onChange }) => {
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap gap-4 items-center justify-between">
         <div>
           <div className="text-xs uppercase tracking-wider text-teal-700 font-bold">
-            临床痴呆严重度分级金标准 (Washington Univ. / 宣武医院规则)
+            临床痴呆严重度分级金标准 (Washington Univ. 规则)
           </div>
           <h2 className="text-lg font-bold mt-1 text-slate-900">
             CDR: 临床痴呆评定量表与 Global CDR 决策树引擎
@@ -67,7 +67,7 @@ export const SectionCDRExpert: React.FC<Props> = ({ record, onChange }) => {
       <div className="p-4 bg-teal-50/60 border border-teal-200 rounded-2xl text-xs text-teal-900 space-y-1.5">
         <div className="flex items-center space-x-2 font-bold text-sm text-teal-950">
           <ShieldCheck className="w-4 h-4 text-teal-600" />
-          <span>华盛顿大学 ADRC / 宣武医院 Global CDR 核心判定规则：</span>
+          <span>华盛顿大学 ADRC Global CDR 核心判定规则：</span>
         </div>
         <p className="leading-relaxed text-teal-800">
           1. <strong>记忆力 (M) 为锚定域</strong>：当至少3个次要领域评分与 M 一致时，Global CDR = M。

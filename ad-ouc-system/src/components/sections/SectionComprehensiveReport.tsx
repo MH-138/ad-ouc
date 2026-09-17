@@ -1,10 +1,6 @@
 import React, { useState } from "react";
 import { SubjectRecord, AssessmentSummaryResults } from "../../types/assessment";
-import {
-  evaluateCompleteAssessment,
-  calculateGlobalCDR,
-  calculateADASCog,
-} from "../../utils/scoringCalculators";
+import { evaluateCompleteAssessment } from "../../utils/scoringCalculators";
 import {
   Sparkles,
   Printer,
@@ -42,8 +38,14 @@ export const SectionComprehensiveReport: React.FC<Props> = ({
   const [saveToast, setSaveToast] = useState(false);
 
   const results: AssessmentSummaryResults = evaluateCompleteAssessment(record);
-  const cdr = calculateGlobalCDR(record.scales.cdr);
-  const adas = calculateADASCog(record.scales.adasCog);
+  // BUG-FIX: CDR 与 ADAS-Cog 原先绕过统一评估，各自直接调用计算函数且没有"是否完成"判定，
+  // 于是空白档案被算出 CDR 0 级 / ADAS-Cog 0 分，并给出"符合 SCD 核心准则"
+  // "认知功能基本正常"的结论（假阴性），与打印报告页（有 hasCdr/hasAdas 守卫）口径相反。
+  // 现统一从 results 取，并由 isAssessed 决定是否展示。
+  const cdr = results.cdr;
+  const adas = results.adasCog;
+  const hasCdrStarted = Boolean(cdr?.isAssessed);
+  const hasAdasStarted = Boolean(adas?.isAssessed);
 
   // Check which batteries have actual data entered
   const hasScdStarted = Boolean(
@@ -96,6 +98,29 @@ export const SectionComprehensiveReport: React.FC<Props> = ({
       (record.scales.psqi.troubles && Object.keys(record.scales.psqi.troubles).length > 0) ||
       record.scales.psqi.selfQuality !== undefined
     )
+  );
+  // 以下量表此前在 CSV 导出里没有完成判定，未开展会被原样导出成 0 分，
+  // 而这些量表"0 分"恰恰代表正常，会被下游统计读成"已评估且正常"（假阴性）。
+  const hasEcogStarted = Boolean(
+    record.scales.ecog?.items && Object.keys(record.scales.ecog.items).length > 0
+  );
+  const hasGdsStarted = Boolean(
+    record.scales.gds15?.answers && Object.keys(record.scales.gds15.answers).length > 0
+  );
+  const hasHamdStarted = Boolean(
+    record.scales.hamd17?.items && Object.keys(record.scales.hamd17.items).length > 0
+  );
+  const hasHamaStarted = Boolean(
+    record.scales.hama?.items && Object.keys(record.scales.hama.items).length > 0
+  );
+  const hasRbdsqStarted = Boolean(
+    record.scales.rbdsq?.items && Object.keys(record.scales.rbdsq.items).length > 0
+  );
+  const hasEssStarted = Boolean(
+    record.scales.ess?.items && Object.keys(record.scales.ess.items).length > 0
+  );
+  const hasNpiStarted = Boolean(
+    record.scales.npi?.items && Object.keys(record.scales.npi.items).length > 0
   );
 
   const triggerSaveFeedback = () => {
@@ -158,17 +183,23 @@ export const SectionComprehensiveReport: React.FC<Props> = ({
       hasMocaStarted ? results.mocaB.score : "--",
       hasAvltStarted ? results.avltH.n5Score : "--",
       hasLogicalMemoryStarted ? results.logicalMemory.delayedStoryUnits : "--",
-      record.scales.stt.sttATestSeconds, record.scales.stt.sttBTestSeconds,
+      hasSttStarted ? record.scales.stt.sttATestSeconds : "--",
+      hasSttStarted ? record.scales.stt.sttBTestSeconds : "--",
       hasBntStarted ? results.bnt.spontaneousScore : "--",
       hasMesStarted ? results.mes.score : "--",
-      adas.totalScore,
-      cdr.globalCDR, cdr.cdrSumOfBoxes,
+      hasAdasStarted ? adas.totalScore : "--",
+      hasCdrStarted ? cdr.globalCDR : "--",
+      hasCdrStarted ? cdr.cdrSumOfBoxes : "--",
       hasFaqStarted ? results.faq.score : "--",
-      results.ecog.avgScore,
-      results.gds15.score, results.hamd17.score, results.hama.score,
+      hasEcogStarted ? results.ecog.avgScore : "--",
+      hasGdsStarted ? results.gds15.score : "--",
+      hasHamdStarted ? results.hamd17.score : "--",
+      hasHamaStarted ? results.hama.score : "--",
       hasPsqiStarted ? results.psqi.score : "--",
-      results.rbdsq.score, results.ess.score,
-      results.npi.totalScore, record.biomarkers.apoe4Genotype.value,
+      hasRbdsqStarted ? results.rbdsq.score : "--",
+      hasEssStarted ? results.ess.score : "--",
+      hasNpiStarted ? results.npi.totalScore : "--",
+      record.biomarkers.apoe4Genotype.value,
       record.biomarkers.abetaPet === 1 ? "Positive" : "Negative",
       record.biomarkers.tauPet === 1 ? "Positive" : "Negative",
       record.diagnosis?.category ?? 0,
@@ -186,7 +217,7 @@ export const SectionComprehensiveReport: React.FC<Props> = ({
   };
 
   const handleCopyClipboard = () => {
-    const summaryText = `【首都医科大学宣武医院 AD-SCD 临床评估报告】
+    const summaryText = `【认知障碍临床数据采集系统课程作业 临床评估报告】
 受试者: ${record.demographics.name} | 年龄: ${record.demographics.age}岁 | 性别: ${record.demographics.gender === 1 ? "男" : "女"} | 文化程度: ${record.demographics.educationYears}年
 编号: ${record.subjectNo} | 访视: ${record.visitCode} | 日期: ${record.evalDate}
 
@@ -195,8 +226,8 @@ export const SectionComprehensiveReport: React.FC<Props> = ({
 • MMSE 简易精神状态: ${hasMmseStarted ? `${results.mmse.score}/30 分 (常模切点 ≤${results.mmse.cutoff}分 -> ${results.mmse.isAbnormal ? "异常" : "正常"})` : "未开展"}
 • MoCA-B 蒙特利尔基础: ${hasMocaStarted ? `${results.mocaB.score}/30 分 (常模切点 ≤${results.mocaB.cutoff}分 -> ${results.mocaB.isAbnormal ? "异常" : "正常"})` : "未开展"}
 • AVLT-H 20min长延迟回忆: ${hasAvltStarted ? `${results.avltH.n5Score}/12 个词` : "未开展"}
-• Global CDR 全球痴呆评定: ${cdr.globalCDR} 级 (CDR-SB: ${cdr.cdrSumOfBoxes} 分, 判定: ${cdr.description})
-• ADAS-Cog 认知总分: ${adas.totalScore}/70 分 (${adas.severity})
+• Global CDR 全球痴呆评定: ${hasCdrStarted ? `${cdr.globalCDR} 级 (CDR-SB: ${cdr.cdrSumOfBoxes} 分, 判定: ${cdr.description})` : "未开展"}
+• ADAS-Cog 认知总分: ${hasAdasStarted ? `${adas.totalScore}/70 分 (${adas.severity})` : "未开展"}
 • FAQ 日常活动功能: ${hasFaqStarted ? `${results.faq.score}/30 分` : "未测"}
 • PSQI 睡眠质量: ${hasPsqiStarted ? `${results.psqi.score}/21 分` : "未测"}
 
@@ -363,16 +394,30 @@ export const SectionComprehensiveReport: React.FC<Props> = ({
             </span>
             <div className="flex items-baseline space-x-2 mt-2">
               <span className="text-3xl font-bold font-mono text-slate-900">
-                {cdr.globalCDR}
+                {hasCdrStarted ? cdr.globalCDR : "--"}
               </span>
-              <span className="text-sm font-semibold text-slate-600">级 ({cdr.description})</span>
+              <span className="text-sm font-semibold text-slate-600">
+                级 ({hasCdrStarted ? cdr.description : "未开展"})
+              </span>
             </div>
             <div className="text-xs text-slate-500 font-mono mt-1">
-              CDR-SB (Sum of Boxes): <strong className="text-slate-800 font-bold">{cdr.cdrSumOfBoxes}</strong> / 18 分
+              CDR-SB (Sum of Boxes): <strong className="text-slate-800 font-bold">{hasCdrStarted ? cdr.cdrSumOfBoxes : "--"}</strong> / 18 分
             </div>
           </div>
-          <div className="text-[11px] text-teal-700 bg-teal-50 p-2.5 rounded-xl border border-teal-100">
-            {cdr.globalCDR === 0 ? "✅ 符合 SCD 核心准则 (CDR=0, 无客观痴呆)" : "⚠️ CDR > 0 提示存在客观轻度功能减退"}
+          <div
+            className={`text-[11px] p-2.5 rounded-xl border ${
+              !hasCdrStarted
+                ? "text-slate-500 bg-slate-50 border-slate-200"
+                : cdr.globalCDR === 0
+                  ? "text-teal-700 bg-teal-50 border-teal-100"
+                  : "text-amber-700 bg-amber-50 border-amber-100"
+            }`}
+          >
+            {!hasCdrStarted
+              ? "尚未完成 CDR 六域评定，暂不能判断是否符合 SCD 核心准则"
+              : cdr.globalCDR === 0
+                ? "✅ 符合 SCD 核心准则 (CDR=0, 无客观痴呆)"
+                : "⚠️ CDR > 0 提示存在客观轻度功能减退"}
           </div>
         </div>
 
@@ -383,16 +428,17 @@ export const SectionComprehensiveReport: React.FC<Props> = ({
             </span>
             <div className="flex items-baseline space-x-2 mt-2">
               <span className="text-3xl font-bold font-mono text-slate-900">
-                {adas.totalScore}
+                {hasAdasStarted ? adas.totalScore : "--"}
               </span>
               <span className="text-xs text-slate-500">/ 70 分 (错误计分)</span>
             </div>
             <div className="text-xs font-semibold text-indigo-700 mt-1">
-              评级：{adas.severity}
+              评级：{hasAdasStarted ? adas.severity : "未开展"}
             </div>
           </div>
           <div className="text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-            涵盖即刻记忆、执行力、命名、定向、理解及运用共 12 个认知子维度。
+            涵盖即刻记忆、执行力、命名、定向、理解及运用共 11 个认知子维度（ADAS-Cog-11，满分 70）；
+            注意力为扩展项，单列展示不计入总分。
           </div>
         </div>
       </div>

@@ -19,7 +19,6 @@ import {
 import { SubjectRecord } from "./assessment";
 import {
   evaluateCompleteAssessment,
-  calculateGlobalCDR,
   calculateMMSE,
   calculateMoCAB,
 } from "../utils/scoringCalculators";
@@ -41,7 +40,7 @@ export type AppPageId =
   | "biomarkers" // 14. I, J, K ATN 生物标志物与诊断分型
   | "comprehensive_report" // 15. 综合诊断决策报告 & A4 打印单
   | "tools_lab" // 16. 神经心理测验计时与手绘工具箱
-  | "clinical_guide"; // 17. 宣武医院临床评定规范与常模手册
+  | "clinical_guide"; // 17. 临床评定规范与常模手册
 
 export interface PageMeta {
   id: AppPageId;
@@ -231,7 +230,12 @@ export const APP_PAGES: PageMeta[] = [
     icon: Award,
     description: "记忆、定向、判断、社区、家务、自理 6 大维度与决策树",
     getBadge: (r) => {
-      const cdr = calculateGlobalCDR(r.scales.cdr);
+      // BUG-FIX: 新建档案的 cdr 是空对象 {}，直接调用 calculateGlobalCDR 会算出
+      // CDR 0 并把徽章显示成"健康/正常"。未完成评定时应显示"未评定"。
+      const cdr = evaluateCompleteAssessment(r).cdr;
+      if (!cdr?.isAssessed) {
+        return { text: "CDR 未评定", color: "bg-slate-100 text-slate-600" };
+      }
       return {
         text: `CDR ${cdr.globalCDR}分 (${cdr.description})`,
         color: cdr.globalCDR === 0 ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800",
@@ -311,7 +315,7 @@ export const APP_PAGES: PageMeta[] = [
   {
     id: "clinical_guide",
     pageNumber: 17,
-    title: "宣武医院临床评定规范与常模速查手册",
+    title: "临床评定规范与常模速查手册",
     shortTitle: "临床规范指南",
     code: "Guide",
     category: "report_tools",

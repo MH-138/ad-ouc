@@ -20,7 +20,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { SubjectRecord } from "../types/assessment";
-import { evaluateCompleteAssessment, calculateGlobalCDR } from "../utils/scoringCalculators";
+import { evaluateCompleteAssessment } from "../utils/scoringCalculators";
 
 // Sub sections
 import { SectionDemographicsHistory } from "../components/sections/SectionDemographicsHistory";
@@ -134,8 +134,8 @@ const SCALE_CATEGORIES: ScaleCategory[] = [
         name: "Global CDR 华盛顿大学分级",
         icon: Award,
         badge: (r) => {
-          const cdrRes = calculateGlobalCDR(r.scales?.cdr);
-          return `CDR ${cdrRes.globalCDR}分`;
+          const cdrRes = evaluateCompleteAssessment(r).cdr;
+          return cdrRes?.isAssessed ? `CDR ${cdrRes.globalCDR}分` : "CDR 未评定";
         },
       },
       {
@@ -220,7 +220,7 @@ export const ScalesWorkbenchPage: React.FC<ScalesWorkbenchPageProps> = ({
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div>
               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                宣武医院全套量表目录
+                认知障碍临床数据采集系统课程作业 全套量表目录
               </h2>
               <p className="mt-0.5 text-xs font-semibold text-slate-800">
                 11 大模块 · 逐项评定

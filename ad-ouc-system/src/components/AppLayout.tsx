@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { SubjectRecord } from "../types/assessment";
 import { AppPageId } from "../types/navigation";
+import { isSimulatedRecord } from "../utils/initialPatient";
 
 interface AppLayoutProps {
   record: SubjectRecord | null;
@@ -133,7 +134,7 @@ export const SYSTEM_SECTIONS: SubsystemConfig[] = [
     defaultPage: "clinical_guide",
     pageIds: ["clinical_guide", "tools_lab"],
     subPages: [
-      { id: "clinical_guide", title: "宣武医院临床常模手册", shortTitle: "常模手册", code: "Guide" },
+      { id: "clinical_guide", title: "临床常模手册", shortTitle: "常模手册", code: "Guide" },
       { id: "tools_lab", title: "神经心理计时画板工具箱", shortTitle: "计时工具箱", code: "Tool" },
     ],
   },
@@ -326,8 +327,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                                   {p.demographics?.name ? p.demographics.name.slice(0, 1) : "患"}
                                 </div>
                                 <div>
-                                  <div className="text-slate-900 font-bold">
-                                    {p.demographics?.name || "未命名"}
+                                  <div className="text-slate-900 font-bold flex items-center gap-1.5">
+                                    <span>{p.demographics?.name || "未命名"}</span>
+                                    {isSimulatedRecord(p) && (
+                                      <span
+                                        className="text-[9px] px-1 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold border border-amber-200"
+                                        title="系统内置的模拟演示受试者（非真实病例）"
+                                      >
+                                        模拟
+                                      </span>
+                                    )}
                                   </div>
                                   <div className="text-[10px] text-slate-400 font-mono">
                                     {p.subjectNo || "SCD-000"} · {p.visitCode || "W000"}

@@ -30,7 +30,7 @@ export const GuidePage: React.FC<GuidePageProps> = ({ onNavigate }) => {
           </div>
           <div>
             <h1 className="text-lg font-bold text-slate-900">
-              首都医科大学宣武医院 AD-SCD 临床评定规范与使用手册
+              认知障碍临床数据采集系统课程作业 临床评定规范与使用手册
             </h1>
             <p className="text-xs text-slate-500">
               国家神经系统疾病临床医学研究中心 / 贾建平教授团队 SCD 前瞻性队列测评标准
@@ -84,7 +84,7 @@ export const GuidePage: React.FC<GuidePageProps> = ({ onNavigate }) => {
                 1. 主观认知下降 (Subjective Cognitive Decline, SCD) 临床入组标准
               </h2>
               <p className="mt-1 text-xs text-slate-500">
-                依据 2014 年 SCD-I (Subjective Cognitive Decline Initiative) 国际诊断框架及宣武医院专家共识
+                依据 2014 年 SCD-I (Subjective Cognitive Decline Initiative) 国际诊断框架及专家共识
               </p>
             </div>
 
@@ -128,7 +128,7 @@ export const GuidePage: React.FC<GuidePageProps> = ({ onNavigate }) => {
                   2. 神经心理测验标准化施测路径与临床质控规范
                 </h2>
                 <p className="mt-1 text-xs text-slate-500">
-                  严格遵照首都医科大学宣武医院标准施测时序（控制测验疲劳效应与短时记忆干扰）
+                  严格遵照标准施测时序（控制测验疲劳效应与短时记忆干扰）
                 </p>
               </div>
               <div className="flex items-center gap-2 text-xs">
@@ -349,7 +349,7 @@ export const GuidePage: React.FC<GuidePageProps> = ({ onNavigate }) => {
                 3. 中国人群神经心理量表常模切界分速查表
               </h2>
               <p className="mt-1 text-xs text-slate-500">
-                依据宣武医院及上海华山医院全国大样本常模数据
+                依据全国大样本常模数据
               </p>
             </div>
 

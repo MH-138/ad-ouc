@@ -39,7 +39,7 @@ export const SectionSCDSubjective: React.FC<Props> = ({ record, onChange }) => {
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap gap-4 items-center justify-between">
         <div>
           <div className="text-xs uppercase tracking-wider text-teal-700 font-bold">
-            SCD 核心诊断环节（宣武医院特色体系）
+            SCD 核心诊断环节（特色体系）
           </div>
           <h2 className="text-lg font-bold mt-1 text-slate-900">
             D、E、H16: 主观认知下降自测、结构性访谈与情景锚定题
@@ -65,22 +65,22 @@ export const SectionSCDSubjective: React.FC<Props> = ({ record, onChange }) => {
         </div>
       </div>
 
-      {/* Part D: SCD-Q9 自测表 */}
+      {/* Part F: SCD-Q9 自测表 */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <div className="flex items-center justify-between pb-4 mb-6 border-b border-slate-100">
           <div className="flex items-center space-x-2.5">
             <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center font-bold">
-              D
+              F
             </div>
             <div>
-              <h3 className="font-bold text-base text-slate-800">D. 主观认知下降自测表 (SCD-Q9)</h3>
+              <h3 className="font-bold text-base text-slate-800">F. 主观认知下降自测表 (SCD-Q9)</h3>
               <p className="text-xs text-slate-500">
                 评分标准：是=1分；否=0分；对于频度题：经常=1分，偶尔=0.5分，从未=0分
               </p>
             </div>
           </div>
           <div className="text-xs text-slate-500 font-mono bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-            宣武临床界值: ≥5 分提示主诉具有临床意义
+            临床界值: ≥5 分提示主诉具有临床意义
           </div>
         </div>
 
@@ -339,14 +339,14 @@ export const SectionSCDSubjective: React.FC<Props> = ({ record, onChange }) => {
         </div>
       </div>
 
-      {/* Part E: 主观认知下降结构性访谈 */}
+      {/* Part G: 主观认知下降结构性访谈 */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
         <div className="flex items-center space-x-2.5 pb-4 border-b border-slate-100">
           <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-            E
+            G
           </div>
           <div>
-            <h3 className="font-bold text-base text-slate-800">E. 主观认知下降结构性访谈（受试者自述 + 知情者问卷）</h3>
+            <h3 className="font-bold text-base text-slate-800">G. 主观认知下降结构性访谈（受试者自述 + 知情者问卷）</h3>
             <p className="text-xs text-slate-500">
               包含核心5项认知主诉、A-E 深度追问矩阵（担忧、起病时长、同龄对比、就医行为），以及知情者观察
             </p>

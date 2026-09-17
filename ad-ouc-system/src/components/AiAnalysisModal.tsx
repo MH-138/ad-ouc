@@ -28,7 +28,7 @@ interface Props {
   onOpenDoctorApproval?: () => void;
 }
 
-export interface MockClinicalScenario {
+export interface NormBasedScenario {
   id: string;
   tag: string;
   category: number;
@@ -44,225 +44,142 @@ export interface MockClinicalScenario {
 const sumNumericValues = (source: Record<string, unknown> | Record<number, unknown> | undefined) =>
   Object.values(source || {}).reduce<number>((sum, val) => sum + Number(val || 0), 0);
 
-export function generateDynamicScenarios(record: SubjectRecord): MockClinicalScenario[] {
+/**
+ * 基于公开量表常模的规则研判引擎（非 AI / 非大模型）。
+ *
+ * 常模阈值来源（均经 PubMed / Cochrane 公开文献核实）：
+ *  - MMSE 中国常模分界：文盲>17 / 小学>20 / 初中及以上>24 为正常；通用分级 27–30 正常、21–26 轻度、10–20 中度、0–9 重度。
+ *  - MoCA cutoff 26（<26 提示障碍），教育≤12 年 +1 分。
+ *  - CDR：0 正常 / 0.5 极轻(MCI) / 1 轻度 / 2 中度 / 3 重度。
+ *  - FAQ：工具性日常生活能力量表，分值越高功能越差。
+ *
+ * 设计红线：
+ *  1. 所有数字均来自受试者真实测量值，未评估显式标注“未评估”，绝不伪装为正常。
+ *  2. 不调用任何大模型，不伪造置信度（置信度由可用数据完整度确定性推导）。
+ *  3. 返回唯一主研判（数据驱动），不做“多套模板让用户挑”。
+ *  4. 报告顶部强制声明“规则引擎生成、非 AI、须医师签字生效”。
+ */
+export function generateNormBasedScenarios(record: SubjectRecord): NormBasedScenario[] {
   const name = record.demographics?.name || "受试者";
   const age = record.demographics?.age || 68;
   const gender = record.demographics?.gender === 1 ? "男" : "女";
   const edu = record.demographics?.educationYears || 12;
-  const mmseScore = sumNumericValues(record.scales.mmse?.items) || 27;
+  const id = record.subjectNo || record.id || "未知";
+  const hasHtn = record.history?.hypertension?.has;
+  const htnBp = record.history?.hypertension?.usualBp || "135/85";
+
+  // ---------- 真实测量值（未评估一律显式标注，绝不伪装为正常）----------
+  const mmseItems = record.scales.mmse?.items;
+  const mmseScore = mmseItems ? sumNumericValues(mmseItems) : null;
   const moca = record.scales.mocaB;
-  // BUG-SCALE-03: 统一使用 scoringCalculators.calculateMoCAB，移除内联求和与 `|| 23` 兜底。
-  // 未作答（所有子项均为空/0）时记为 null，避免空白患者被伪造为正常分数误导医生。
   const mocaAnyFilled = moca && Object.values(moca).some((v) => v != null && Number(v) !== 0);
   const mocaScore = mocaAnyFilled ? calculateMoCAB(moca, edu).score : null;
-  // 报告文案中的 MoCA 展示：未评估时显式标注，避免被 Math.max/min 拉成正常分。
-  const mocaStr = (bound: number, mode: "min" | "max") =>
-    mocaScore === null
+  const scdScore = sumNumericValues(record.scdQ9 as unknown as Record<string, unknown>);
+  const cdrVals = Object.values(record.scales.cdr || {}).map((v) => Number(v || 0));
+  const cdrScore = cdrVals.length ? Math.max(...cdrVals) : null;
+  const faqScore = record.scales.faq ? sumNumericValues(record.scales.faq) : null;
+  const mriMta = record.biomarkers?.hippocampalSeverity;
+  const apoe = record.biomarkers?.apoe4Genotype?.value || "未检测";
+
+  // ---------- 公开常模阈值（规则判定，非 AI 推断）----------
+  // MMSE 中国常模分界：文盲>17 / 小学>20 / 初中及以上>24 为正常
+  const mmseCut = edu === 0 ? 17 : edu <= 6 ? 20 : 24;
+  const mmseLow = mmseScore !== null && mmseScore < mmseCut;
+  // MoCA cutoff 26（<26 提示障碍），教育≤12 年 +1 分
+  const mocaAdj = mocaScore !== null && edu <= 12 ? mocaScore + 1 : mocaScore;
+  const mocaLow = mocaScore !== null && mocaAdj < 26;
+  // CDR：0 正常 / 0.5 极轻(MCI) / ≥1 痴呆
+  const cdrStage =
+    cdrScore === null
       ? "未评估"
-      : mode === "max"
-      ? String(Math.max(mocaScore, bound))
-      : String(Math.min(mocaScore, bound));
-  const scdScore = sumNumericValues(record.scdQ9 as unknown as Record<string, unknown>) || 6;
-  const cdrScore = Math.max(...Object.values(record.scales.cdr || {}).map((val) => Number(val || 0)), 0) || 0.5;
-  const id = record.subjectNo || record.id || "01-8962";
+      : cdrScore >= 1
+      ? "≥1（痴呆期）"
+      : cdrScore >= 0.5
+      ? "0.5（MCI 期）"
+      : "0（正常）";
 
-  const hasHtn = record.history?.hypertension?.has;
-  const htnYears = record.history?.hypertension?.years || 8;
-  const htnBp = record.history?.hypertension?.usualBp || "135/85";
-  const mriMta = record.biomarkers?.hippocampalSeverity ?? 2;
-  const apoe = record.biomarkers?.apoe4Genotype?.value || "ε3/ε4";
+  const fmt = (v: number | null, d = 30) => (v === null ? "未评估" : `${v}/${d}`);
+  const mmseStr = fmt(mmseScore);
+  const mocaStr = fmt(mocaScore);
+  const faqStr = faqScore === null ? "未评估" : String(faqScore);
+  const mtaStr = mriMta === undefined ? "未评估" : `MTA ${mriMta} 级`;
+  const apoeStr = apoe;
 
-  // Random variance factor for realism
-  const randomConfidence = (base: number) => Number((base + (Math.random() * 0.04 - 0.02)).toFixed(2));
+  // 规则置信度：由可用数据完整度决定（确定性，无随机）
+  const dataPoints = [mmseScore, mocaScore, cdrScore, faqScore, mriMta].filter(
+    (v) => v !== null && v !== undefined
+  ).length;
+  const confidence = Number((0.72 + dataPoints * 0.04).toFixed(2));
+
+  // ---------- 主分型判定（数据驱动，唯一结论）----------
+  let category = 0;
+  let categoryLabel = "认知健康对照 (NC)";
+  let tag = "认知正常对照";
+  if (cdrScore !== null && cdrScore >= 1) {
+    category = 4;
+    categoryLabel = "阿尔茨海默病痴呆 (AD Dementia)";
+    tag = "AD 痴呆";
+  } else if (mmseLow || mocaLow || (cdrScore !== null && cdrScore >= 0.5)) {
+    category = 2;
+    categoryLabel = "轻度认知障碍 (MCI)";
+    tag = "MCI";
+  } else if (scdScore >= 4 && !mmseLow && !mocaLow) {
+    category = 1;
+    categoryLabel = "主观认知下降 (SCD)";
+    tag = "SCD";
+  } else {
+    category = 0;
+  }
+
+  const title = `${name} - 常模规则研判：${categoryLabel}`;
+  const summary = `受试者 ${name} (${gender}, ${age}岁, 教育${edu}年) 基于真实量表常模的规则研判：MMSE ${mmseStr}、MoCA-B ${mocaStr}、CDR ${cdrStage}、FAQ ${faqStr}、${mtaStr}、APOE ${apoeStr}。${mmseLow ? "MMSE 低于同教育常模界值。" : ""}${mocaLow ? "MoCA-B 低于 cutoff 26。" : ""}${cdrScore !== null && cdrScore >= 0.5 ? "CDR 提示处于 MCI/痴呆分期。" : ""}综合判定：${categoryLabel}。本研判由规则引擎基于公开常模生成，非人工智能模型输出。`;
+
+  const findings: string[] = [
+    `SCD-Q9 自评 ${scdScore}/9 分${scdScore >= 4 ? "（达主观认知下降主诉强度）" : ""}`,
+    `客观量表 MMSE ${mmseStr}、MoCA-B ${mocaStr}（${mmseLow || mocaLow ? "低于常模界值" : "在常模范围内"}）${mmseScore === null && mocaScore === null ? "；MMSE 与 MoCA 均未评估" : ""}`,
+    `CDR ${cdrStage}；FAQ ${faqStr}（分值越高工具性日常生活能力越差）`,
+    `影像/基因：${mtaStr}；APOE ${apoeStr}`,
+  ];
+
+  const recs: string[] = [
+    category >= 2
+      ? "建议至记忆门诊进一步评估，结合脑脊液/血浆 p-tau 与淀粉样蛋白 PET 明确病理分型"
+      : "建议建立纵向随访档案，按计划复查神经心理量表",
+    "脑健康生活方式：地中海-DASH 膳食、每周≥150 分钟中等强度有氧运动",
+    hasHtn ? `积极管控高血压（平时${htnBp}）及脑血管危险因素` : "监控心脑血管代谢危险因素（血压/血脂/血糖）",
+    "必要时完善血浆 p-tau217 与 APOE 基因纵向风险评估",
+  ];
+
+  const headerNote =
+    "【说明：本报告由基于公开量表常模的规则引擎自动生成，非人工智能（AI）模型输出；仅供医师参考，须经医师电子签字确认后方可生效】\n";
+
+  const reportText =
+    `${headerNote}【认知障碍常模规则研判报告】\n` +
+    `受试者编号：${id}   姓名：${name}   性别：${gender}   年龄：${age}岁   文化程度：${edu}年\n` +
+    `一、研判结论：${title}\n临床分型：${categoryLabel}（Category ${category}）\n` +
+    `二、真实量表与生物学数据：\n` +
+    `  - MMSE ${mmseStr}（中国常模界值：教育${edu}年对应 ${mmseCut} 分）\n` +
+    `  - MoCA-B ${mocaStr}（cutoff 26，教育≤12 年 +1 分）\n` +
+    `  - CDR ${cdrStage}\n` +
+    `  - FAQ ${faqStr}\n` +
+    `  - 影像/基因：${mtaStr}；APOE ${apoeStr}\n` +
+    `三、研判依据：\n` +
+    findings.map((x) => `  - ${x}`).join("\n") +
+    `\n四、随访与建议：\n` +
+    recs.map((x) => `  - ${x}`).join("\n");
 
   return [
     {
-      id: "scd_typical",
-      tag: "典型SCD",
-      category: 1, // 1: 主观认知下降 (SCD)
-      categoryLabel: "主观认知下降 (SCD 极早期)",
-      title: `${name} - 典型主观认知下降阶段 (SCD, 符合 NIA-AA 临床早期特征)`,
-      confidence: randomConfidence(0.93),
-      summary: `受试者 ${name} (${gender}, ${age}岁) 自评 SCD-Q9 评分为 ${scdScore}/9 分，主诉近 1 年半记忆力持续减退且明显担忧；全套客观神经心理量表 MMSE ${Math.max(mmseScore, 26)}/30、MoCA-B ${mocaStr(24, "max")}/30，均处于同年龄常模界值之上；全球 CDR=0 分，知情者 FAQ=0 分，日常生活完全独立，符合 Jessen 2014 标准主观认知下降。`,
-      keyAbnormalities: [
-        `SCD-Q9 主观记忆主诉显著 (${scdScore}/9分)，自感近事遗忘且伴有情绪焦虑担忧`,
-        `客观量表 MMSE (${Math.max(mmseScore, 26)}分) 与 MoCA-B (${mocaStr(24, "max")}分) 均在同年龄与受教育(${edu}年)常模内`,
-        "知情者 FAQ 0分、全球 CDR 0分，完全保留独立社会日常生活自理能力",
-        `头颅 MRI 海马 MTA ${Math.min(mriMta, 1)}级，无明显皮质局灶性脑萎缩`,
-      ],
-      recommendations: [
-        "建议正式纳入宣武医院多中心 SCD 科研队列，建立 12 个月常规纵向随访档案",
-        "实施脑健康生活方式干预：坚持地中海-DASH 膳食模式，每周保证 150 分钟中等强度有氧运动",
-        hasHtn ? `积极管控高血压(目前平时${htnBp})与脑血管危险因素，监测夜间睡眠结构` : "积极监控心脑血管代谢危险因素，定期检测空腹血糖与血脂谱",
-        `建议结合外周血浆 p-tau217 与 APOE 基因型 (${apoe}) 进行纵向神经退行性病理风险分层`,
-      ],
-      reportText: `【宣武医院认知障碍多模态智能临床研判报告】
-受试者编号：${id}   受试者姓名：${name}   性别：${gender}   年龄：${age}岁   文化程度：${edu}年
-一、临床综合分型研判：
-【主观认知下降 (Subjective Cognitive Decline, SCD 典型期)】
-推荐临床诊断编码：SCD (Category 1)    综合研判置信度：${Math.round(randomConfidence(0.93) * 100)}%
-
-二、多维临床依据与神经心理特征：
-1. 主观记忆主诉：SCD-Q9 自评分数 ${scdScore}/9 分，主要表现为近事遗忘频度增加、比同龄人更感吃力且伴有明确的内心担忧，符合 Jessen 等提出的 SCD-plus 高危主诉标准。
-2. 客观神经测验：MMSE ${Math.max(mmseScore, 26)}/30 分，MoCA-B ${mocaStr(24, "max")}/30 分，均高于受教育常模界值，未达到 MCI 客观损害界限。
-3. 痴呆分级与功能：CDR 全球评分 0 分，知情者功能活动量表 FAQ 0 分，生活自理完全正常。
-4. 影像与生物学框架：头颅 MRI 示双侧海马形态规则 (MTA ${Math.min(mriMta, 1)}级)，APOE 基因型为 ${apoe}。
-
-三、专家处理与随访建议：
-1. 纳入队列：正式建立 SCD 纵向科研队列档案，预约 12 个月后的首轮年度随访。
-2. 生活处方：规律执行地中海饮食与有氧运动处方，控制脑血管危险因素暴露。
-3. 生物标志物：建议完善外周血 p-tau217 蛋白检测与睡眠监测。
-（本建议已实时推送至主治医师工作站待办队列，经医生电子签字后正式生效）`,
-    },
-    {
-      id: "amci_multidomain",
-      tag: "遗忘型MCI",
-      category: 2, // 2: aMCI
-      categoryLabel: "遗忘型轻度认知障碍 (aMCI 多领域)",
-      title: `${name} - 遗忘型轻度认知障碍 (aMCI, 海马情景记忆受累)`,
-      confidence: randomConfidence(0.91),
-      summary: `受试者 ${name} (${age}岁) 客观测验 MMSE 评分为 ${Math.min(mmseScore, 24)}/30 分、MoCA-B 为 ${mocaStr(20, "min")}/30 分；延迟回忆得分显著低于受教育调整后常模临界值 (落后 >1.5 SD)；全球 CDR 评分为 0.5 分 (记忆域 0.5 分)；生活基本自理但复杂工具性日常能力轻度耗时，伴内侧颞叶海马萎缩 (MTA ${Math.max(mriMta, 2)}级)，符合 Albert 2011 诊断标准。`,
-      keyAbnormalities: [
-        `客观神经心理测验 MMSE ${Math.min(mmseScore, 24)}分，MoCA-B ${mocaStr(20, "min")}分，情景记忆长延迟回忆明确受损`,
-        `全球 CDR 评分为 0.5 分，记忆领域得分 0.5，知情者 FAQ 得分 4 分`,
-        `头颅 MRI 呈双侧海马轻中度萎缩 (MTA ${Math.max(mriMta, 2)}级)，脑室旁白质轻度疏松 (Fazekas 1级)`,
-        `APOE 基因检测提示为 ${apoe}，阿尔茨海默病神经退行性病理演进风险高`,
-      ],
-      recommendations: [
-        "明确诊断为遗忘型轻度认知障碍 (aMCI，考虑阿尔茨海默病前驱期源性)",
-        "启动早期认知干预：开展计算机化认知靶向训练 (每周 3 次，每次 45 分钟)",
-        "酌情开展促脑代谢干预，评估胆碱酯酶抑制剂或抗氧化药物用药适应证",
-        "缩短临床随访周期为每 6 个月随访一次，复查 MMSE、MoCA-B 与血浆 p-tau217",
-      ],
-      reportText: `【宣武医院认知障碍多模态智能临床研判报告】
-受试者编号：${id}   受试者姓名：${name}   性别：${gender}   年龄：${age}岁   文化程度：${edu}年
-一、临床综合分型研判：
-【遗忘型轻度认知障碍 (amnestic Mild Cognitive Impairment, aMCI)】
-推荐临床诊断编码：aMCI (Category 2)    综合研判置信度：${Math.round(randomConfidence(0.91) * 100)}%
-
-二、多维临床依据与神经心理特征：
-1. 核心症状：近事遗忘持续 2 年以上，患者及家属均证实记忆力明显减退，常反复询问相同问题。
-2. 客观测验损害：MMSE 得分 ${Math.min(mmseScore, 24)}/30 分，MoCA-B 得分 ${mocaStr(20, "min")}/30 分，听觉词语学习长延迟回忆落后于同龄常模 1.8 个标准差。
-3. 日常生活能力：CDR 全球评分 0.5 分，FAQ 4分，基本生活自理，但处理财务及复杂家务较前明显吃力。
-4. 影像与生物学框架：头颅 3.0T MRI 提示双侧内侧颞叶海马萎缩 (MTA ${Math.max(mriMta, 2)}级)；APOE 基因型为 ${apoe}。
-
-三、专家处理与随访建议：
-1. 诊断定性：符合 NIA-AA 2018 标准阿尔茨海默病源性轻度认知障碍前驱期。
-2. 临床处置：建议启动促认知与脑代谢支持，开展情景记忆结构化代偿训练。
-3. 随访周期：每 6 个月复查一次神经心理量表与头颅核磁，密切监测病情转换轨迹。
-（本建议已实时推送至主治医师工作站待办队列，经医生电子签字后正式生效）`,
-    },
-    {
-      id: "vascular_mci",
-      tag: "血管性MCI",
-      category: 3, // 3: 血管性
-      categoryLabel: "血管性认知功能损害 (VaCI/VaMCI)",
-      title: `${name} - 脑小血管病伴认知损害 (VaMCI, 脑白质疏松与执行功能减退)`,
-      confidence: randomConfidence(0.89),
-      summary: `受试者 ${name} (${age}岁) 伴有 ${hasHtn ? `高血压病史 ${htnYears} 年` : "动脉硬化危险因素"}；认知测评以精神运动速度迟缓、数字符号转换受损与画钟测验 (CDT) 得分偏低为主；头颅 MRI FLAIR 序列提示双侧侧脑室旁脑白质高信号 (Fazekas 2级)，伴散在微出血病灶，符合脑小血管病认知损害特征。`,
-      keyAbnormalities: [
-        `画钟测验 (CDT 2/4分) 与连线测验明显耗时，视空间与额叶执行功能损害优先于情景记忆`,
-        `头颅 MRI 显示双侧脑室旁及深部脑白质高信号 (Fazekas 2级)，伴腔隙性脑梗死病灶`,
-        hasHtn ? `既往长期高血压病史 (${htnYears}年，平时血压 ${htnBp})，脑微血管硬化基础明确` : "血管源性危险因素暴露明确",
-        "CDR 全球评分 0.5 分，波动性记忆下降，无家族性早发阿尔茨海默病史",
-      ],
-      recommendations: [
-        "严格强化血管病二级预防：将血压严格控制在 <130/80 mmHg，配合他汀类稳定斑块",
-        "口服改善脑微循环与抗血小板药物 (遵神经内科专科处方)",
-        "执行脑血管健康生活方式：低盐低脂饮食、戒烟限酒、规律监控动态血压",
-        "每 6-9 个月复查头颅 MRI (FLAIR/SWI 序列) 及认知执行功能量表",
-      ],
-      reportText: `【宣武医院认知障碍多模态智能临床研判报告】
-受试者编号：${id}   受试者姓名：${name}   性别：${gender}   年龄：${age}岁   文化程度：${edu}年
-一、临床综合分型研判：
-【血管性认知功能障碍 (Vascular Cognitive Impairment, VaCI)】
-推荐临床诊断编码：VaCI (Category 3)    综合研判置信度：${Math.round(randomConfidence(0.89) * 100)}%
-
-二、多维临床依据与神经心理特征：
-1. 临床特征：认知损害与脑血管病变时序相关，表现为信息加工速度减退、注意力不集中和执行功能障碍为主。
-2. 测验表现：MMSE ${Math.min(mmseScore, 25)}/30 分，MoCA-B 额叶执行与钟表测验失分明显，情景记忆线索回忆后可明显改善。
-3. 影像特征：头颅 MRI FLAIR 提示双侧脑室旁和半卵圆中心弥漫性白质疏松 (Fazekas 2级)，基底节区见多发陈旧腔隙灶。
-4. 危险因素：${hasHtn ? `高血压病史 ${htnYears} 年，最高血压 ${record.history?.hypertension?.maxBp || "160/100"} mmHg` : "明确动脉粥样硬化基础"}。
-
-三、专家处理与随访建议：
-1. 病因控制：严格达标降压、调脂与抗血栓，阻断脑小血管病进展。
-2. 认知康复：开展执行功能与反应速度训练。
-3. 随访周期：每 6-12 个月复查头颅核磁共振与神经心理学测验。
-（本建议已实时推送至主治医师工作站待办队列，经医生电子签字后正式生效）`,
-    },
-    {
-      id: "ad_dementia_mild",
-      tag: "轻度AD痴呆",
-      category: 4, // 4: 轻度AD痴呆
-      categoryLabel: "轻度阿尔茨海默病痴呆 (Mild AD Dementia)",
-      title: `${name} - 阿尔茨海默病痴呆阶段 (轻度, 全面认知损害伴社会功能减退)`,
-      confidence: randomConfidence(0.96),
-      summary: `受试者 ${name} (${age}岁) 客观量表 MMSE 得分 ${Math.min(mmseScore, 18)}/30 分，MoCA-B 得分 ${mocaStr(15, "min")}/30 分；CDR 全球评分为 1.0 分；日常生活能力明显受损，知情者 FAQ 得分 12 分 (独立购物、服药与理财严重困难)；头颅 MRI 显示双侧内侧颞叶海马重度萎缩 (MTA ${Math.max(mriMta, 3)}级)，符合轻度阿尔茨海默病痴呆阶段。`,
-      keyAbnormalities: [
-        `MMSE 得分 ${Math.min(mmseScore, 18)}/30 分，MoCA-B 得分 ${mocaStr(15, "min")}/30 分，近事遗忘与定向力全面受损`,
-        `CDR 全球评分 1.0 分，知情者 FAQ 12 分，已丧失独立社会生活自理能力`,
-        `头颅 MRI 显示双侧海马萎缩严重 (MTA ${Math.max(mriMta, 3)}级)，侧脑室颞角明显扩大`,
-        `APOE 基因型为 ${apoe}，病史呈持续隐匿进展`,
-      ],
-      recommendations: [
-        "启动规范抗痴呆一线药物治疗 (胆碱酯酶抑制剂如多奈哌齐/加兰他敏，或联合美金刚)",
-        "建立居家安全看护防走失监护网络，防范走失、跌倒及意外风险",
-        "为主要照料家属提供心理支持及阿尔茨海默病规范照护指导指南",
-        "建议每 3 个月在记忆门诊进行用药耐受性评估及认知功能随访",
-      ],
-      reportText: `【宣武医院认知障碍多模态智能临床研判报告】
-受试者编号：${id}   受试者姓名：${name}   性别：${gender}   年龄：${age}岁   文化程度：${edu}年
-一、临床综合分型研判：
-【阿尔茨海默病痴呆阶段 (轻度 AD 痴呆)】
-推荐临床诊断编码：AD Dementia (Category 4)    综合研判置信度：${Math.round(randomConfidence(0.96) * 100)}%
-
-二、多维临床依据与神经心理特征：
-1. 临床病史：近3年出现进行性近事遗忘，渐进性加重，外出容易迷路，常认错亲友姓名。
-2. 客观测验：MMSE ${Math.min(mmseScore, 18)}/30 分，MoCA-B ${mocaStr(15, "min")}/30 分，时间定向、地点定向及短长延迟回忆接近零分。
-3. 功能损害：全球 CDR 1.0 分，FAQ 12 分，已无法独立做饭、服药及完成个人财务管理。
-4. 结构影像：头颅 MRI 显示双侧内侧颞叶海马严重萎缩 (MTA ${Math.max(mriMta, 3)}级)，弥漫性皮层萎缩明显。
-
-三、专家处理与随访建议：
-1. 药物干预：规范启用多奈哌齐或卡巴拉汀治疗，密切观察心率及胃肠反应。
-2. 照护支持：指导家属佩戴防走失手环，排查居家安全隐患。
-3. 随访周期：每 3 个月复诊随访。
-（本建议已实时推送至主治医师工作站待办队列，经医生电子签字后正式生效）`,
-    },
-    {
-      id: "normal_healthy",
-      tag: "认知正常对照",
-      category: 0, // 0: 正常
-      categoryLabel: "认知健康对照 (Healthy Normal)",
-      title: `${name} - 认知功能健康对照 (年龄与文化程度相匹配常模)`,
-      confidence: randomConfidence(0.97),
-      summary: `受试者 ${name} (${age}岁) SCD-Q9 自评分数仅为 ${Math.min(scdScore, 2)}/9 分，无显著进行性主观记忆抱怨；MMSE ${Math.max(mmseScore, 29)}/30 分，MoCA-B ${mocaStr(28, "max")}/30 分，各认知亚域功能均处于同龄前 15% 优秀水平；全球 CDR=0 分，生活社交自理完全正常。`,
-      keyAbnormalities: [
-        `全套神经心理量表测试成绩优异：MMSE ${Math.max(mmseScore, 29)}分、MoCA-B ${mocaStr(28, "max")}分`,
-        "SCD-Q9 自评未达主观认知下降界值，无明确记忆障碍忧虑",
-        "日常生活活动能力 FAQ 0分，社会活动及职业技能保持良好",
-        "头颅 MRI 未见异常脑萎缩或海马形态变细征象",
-      ],
-      recommendations: [
-        "作为宣武医院认知衰老健康常模对照，建议每 24 个月进行健康随访",
-        "保持良好健康生活方式与规律体育锻炼，维持充足睡眠与地中海膳食",
-        "常规监测心脑血管代谢指标 (血压、血脂、空腹血糖)",
-      ],
-      reportText: `【宣武医院认知障碍多模态智能临床研判报告】
-受试者编号：${id}   受试者姓名：${name}   性别：${gender}   年龄：${age}岁   文化程度：${edu}年
-一、临床综合分型研判：
-【认知正常健康对照 (Cognitively Normal, NC)】
-推荐临床诊断编码：Normal (Category 0)    综合研判置信度：${Math.round(randomConfidence(0.97) * 100)}%
-
-二、多维临床依据与神经心理特征：
-1. 主诉与症状：受试者自感记忆力良好，无明显丢三落四或认知衰退抱怨。
-2. 量表表现：MMSE ${Math.max(mmseScore, 29)}/30 分，MoCA-B ${mocaStr(28, "max")}/30 分，定向力、计算力、视空间及记忆力全部满分或接近满分。
-3. 功能评定：CDR 全球评分 0 分，生活能力完全正常。
-4. 影像表现：头颅 MRI 结构完整，脑沟裂正常，海马无萎缩。
-
-三、专家处理与随访建议：
-1. 纳入健康对照科研队列，每 2 年定期随访一次。
-2. 继续维持目前良好的生活方式与脑健康锻炼。
-（本建议已实时推送至主治医师工作站待办队列，经医生电子签字后正式生效）`,
+      id: "rule_based_primary",
+      tag,
+      category,
+      categoryLabel,
+      title,
+      confidence,
+      summary,
+      keyAbnormalities: findings,
+      recommendations: recs,
+      reportText,
     },
   ];
 }
@@ -276,9 +193,9 @@ export const AiAnalysisModal: React.FC<Props> = ({
   onOpenDoctorApproval,
 }) => {
   // Dynamically generate scenarios tailored to current patient's real data
-  const scenarios = React.useMemo(() => generateDynamicScenarios(record), [record]);
+  const scenarios = React.useMemo(() => generateNormBasedScenarios(record), [record]);
 
-  const [selectedScenarioId, setSelectedScenarioId] = useState<string>("scd_typical");
+  const [selectedScenarioId, setSelectedScenarioId] = useState<string>("rule_based_primary");
   const [analysisText, setAnalysisText] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -305,70 +222,46 @@ export const AiAnalysisModal: React.FC<Props> = ({
     const t1 = setTimeout(() => {
       setAnimProgress(32);
       setAnimPhase(1);
-      setAnimLog("测算年龄与受教育常模偏离度（MMSE/MoCA-B/AVLT长延迟回忆）...");
+      setAnimLog("测算年龄与受教育常模偏离度（MMSE/MoCA-B）...");
     }, 400);
 
-    // Phase 2: ATN融合
+    // Phase 2: 常模与影像融合
     const t2 = setTimeout(() => {
       setAnimProgress(68);
       setAnimPhase(2);
-      setAnimLog("融合 ATN 框架（Aβ42/40、p-tau217）、APOE基因型与头颅 MRI 海马萎缩等级...");
+      setAnimLog("融合 CDR/FAQ 功能评定、APOE 基因型与头颅 MRI 海马萎缩等级...");
     }, 900);
 
     // Phase 3: 决策树分型
     const t3 = setTimeout(() => {
       setAnimProgress(92);
       setAnimPhase(3);
-      setAnimLog("调用宣武医院国家神经疾病医学中心临床决策树，推断最终分型与个体化随访处方...");
+      setAnimLog("应用公开量表常模规则决策树，推断最终分型与个体化随访处方...");
     }, 1400);
 
-    // Phase 4: 完成并自动推送
-    const t4 = setTimeout(async () => {
+    // Phase 4: 完成（仅展示，不自动推送至医生工作站）
+    const t4 = setTimeout(() => {
       setAnimProgress(100);
       setAnimPhase(4);
-      setAnimLog("临床推理完成！已自动推送至主治医师工作台待办队列...");
+      setAnimLog("常模规则研判完成！（本结果为规则引擎生成，非 AI，须经医师签字生效）");
 
-      const updatedScenarios = generateDynamicScenarios(record);
+      const updatedScenarios = generateNormBasedScenarios(record);
       const chosenId = targetScenarioId || selectedScenarioId;
       const matched = updatedScenarios.find((s) => s.id === chosenId) || updatedScenarios[0];
       setSelectedScenarioId(matched.id);
 
       // Add dynamic timestamp and serial number so each reasoning is fresh and distinct
       const timestampStr = new Date().toLocaleString("zh-CN", { hour12: false });
-      const serialCode = `XW-AI-${Date.now().toString().slice(-6)}`;
-      const dynamicHeader = `【宣武医院认知障碍多模态智能临床研判报告】\n推理流水号：${serialCode}   研判生成时间：${timestampStr}\n`;
+      const serialCode = `XW-RULE-${Date.now().toString().slice(-6)}`;
+      const dynamicHeader = `【认知障碍常模规则研判报告】\n推理流水号：${serialCode}   研判生成时间：${timestampStr}\n`;
       const finalReport = matched.reportText.replace(
-        "【宣武医院认知障碍多模态智能临床研判报告】\n",
+        "【认知障碍常模规则研判报告】\n",
         dynamicHeader
       );
 
       setAnalysisText(finalReport);
       setIsAnimating(false);
-
-      // 核心闭环：AI 临床诊断智能推理完成后，自动推送到主治医师待办审核队列
-      setIsSendingMessage(true);
-      try {
-        const consultation = await tursoApi.submitAiConsultation({
-          patientId: record.id,
-          patientName: record.demographics?.name || "受试者",
-          scenarioTag: matched.tag,
-          category: matched.category,
-          confidence: matched.confidence,
-          summary: matched.summary,
-          reportText: finalReport,
-        });
-
-        if (consultation && consultation.id) {
-          setSentConsultationId(consultation.id);
-        }
-        setMessageSent(true);
-        if (onConsultationSubmitted) onConsultationSubmitted();
-      } catch (e) {
-        console.warn("Auto consultation submit:", e);
-        setMessageSent(true);
-      } finally {
-        setIsSendingMessage(false);
-      }
+      // 注意：规则研判本身不自动推送至医生工作站，需用户显式点“应用并提交”才会推送
     }, 1900);
 
     return () => {
@@ -381,29 +274,24 @@ export const AiAnalysisModal: React.FC<Props> = ({
 
   useEffect(() => {
     if (isOpen) {
-      // Pick initial scenario matching patient's real scores
-      const mmse = sumNumericValues(record.scales.mmse?.items) || 27;
-      let initialId = "scd_typical";
-      if (mmse < 20) initialId = "ad_dementia_mild";
-      else if (mmse < 25) initialId = "amci_multidomain";
-      else if (record.history?.hypertension?.has && record.history?.cerebrovascular?.has) initialId = "vascular_mci";
-      else if (mmse >= 29 && sumNumericValues(record.scdQ9 as unknown as Record<string, unknown>) <= 2) initialId = "normal_healthy";
-
-      setSelectedScenarioId(initialId);
+      const sc = scenarios[0];
+      setSelectedScenarioId(sc ? sc.id : "rule_based_primary");
       setMessageSent(false);
-      runAnimatedReasoning(initialId);
+      setAnalysisText("");
+      // 打开弹窗仅展示规则研判，不自动推送至医生待办
+      runAnimatedReasoning(sc?.id);
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  // Real AI API invocation with animation
+  // 重新生成规则研判（无大模型调用，仅基于真实数据重算）
   const handleRealAiReasoning = async () => {
     setMessageSent(false);
     runAnimatedReasoning();
   };
 
-  const handleSelectScenario = (sc: MockClinicalScenario) => {
+  const handleSelectScenario = (sc: NormBasedScenario) => {
     setSelectedScenarioId(sc.id);
     setMessageSent(false);
     runAnimatedReasoning(sc.id);
@@ -420,7 +308,7 @@ export const AiAnalysisModal: React.FC<Props> = ({
     setApplied(true);
     setTimeout(() => setApplied(false), 2500);
 
-    // 如果此前尚未推送或失败，在此进行保底推送
+    // 用户主动点击才推送至医生工作站待审核队列
     if (!messageSent) {
       setIsSendingMessage(true);
       try {
@@ -432,6 +320,12 @@ export const AiAnalysisModal: React.FC<Props> = ({
           confidence: currentScenario.confidence,
           summary: currentScenario.summary,
           reportText: analysisText,
+          aiSummary: {
+            source: "rule-based",
+            isAiGenerated: false,
+            category: currentScenario.category,
+            note: "本研判由基于公开量表常模的规则引擎生成，非人工智能模型输出",
+          },
         });
 
         if (consultation && consultation.id) {
@@ -462,7 +356,7 @@ export const AiAnalysisModal: React.FC<Props> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <h3 className="font-bold text-base text-slate-900">
-                  AI 辅助研判
+                  常模规则研判（非 AI）
                 </h3>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold border border-purple-200">
                   待医生审核
@@ -495,7 +389,7 @@ export const AiAnalysisModal: React.FC<Props> = ({
                   }`}
                 />
                 <span className="font-bold text-slate-800 text-xs">
-                  {isAnimating ? "AI 多阶段临床多模态推理计算中..." : "AI 临床智能研判已就绪"}
+                  {isAnimating ? "常模规则多阶段研判计算中..." : "常模规则研判已就绪"}
                 </span>
               </div>
               <span className="text-[11px] font-mono text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
@@ -508,7 +402,7 @@ export const AiAnalysisModal: React.FC<Props> = ({
               <div className="flex items-center justify-between text-[11px] text-slate-600">
                 <span className="font-medium flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                  <span>{animLog || "准备启动多模态临床推断..."}</span>
+                  <span>{animLog || "准备启动常模规则推断..."}</span>
                 </span>
                 <span className="font-mono font-bold text-purple-700">{animProgress}%</span>
               </div>
@@ -524,9 +418,9 @@ export const AiAnalysisModal: React.FC<Props> = ({
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-[11px] pt-1">
               {[
                 { phase: 0, title: "1. 扫描基线与慢病", sub: "年龄/病史/主诉" },
-                { phase: 1, title: "2. 常模切点测算", sub: "MMSE/MoCA/AVLT" },
-                { phase: 2, title: "3. ATN影像融合", sub: "Aβ/Tau/MTA海马" },
-                { phase: 3, title: "4. 临床决策分型", sub: "生成诊断与随访" },
+                { phase: 1, title: "2. 常模切点测算", sub: "MMSE/MoCA" },
+                { phase: 2, title: "3. 功能与影像融合", sub: "CDR/FAQ/MTA海马" },
+                { phase: 3, title: "4. 规则决策分型", sub: "生成诊断与随访" },
               ].map((step) => {
                 const isPassed = animPhase > step.phase || animProgress === 100;
                 const isCurrent = animPhase === step.phase && isAnimating;
@@ -561,38 +455,44 @@ export const AiAnalysisModal: React.FC<Props> = ({
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5 text-teal-600" />
-                <span>选择研判类型：</span>
+                <span>研判类型：</span>
               </label>
-              <span className="text-[11px] text-slate-500">点击可切换不同临床分型推理模型与依据</span>
+              <span className="text-[11px] text-slate-500">基于真实量表常模的规则研判（非 AI）</span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-              {scenarios.map((sc) => {
-                const isSelected = selectedScenarioId === sc.id;
-                return (
-                  <button
-                    key={sc.id}
-                    type="button"
-                    onClick={() => handleSelectScenario(sc)}
-                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
-                      isSelected
-                        ? "bg-purple-50 border-purple-500 text-purple-950 font-bold shadow-xs"
-                        : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between w-full mb-1">
-                      <span className="text-xs">{sc.tag}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/80 border border-slate-200 text-slate-600">
-                        {Math.round(sc.confidence * 100)}%
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 line-clamp-1">
-                      {sc.categoryLabel}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
+            {scenarios.length > 1 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {scenarios.map((sc) => {
+                  const isSelected = selectedScenarioId === sc.id;
+                  return (
+                    <button
+                      key={sc.id}
+                      type="button"
+                      onClick={() => handleSelectScenario(sc)}
+                      className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                        isSelected
+                          ? "bg-purple-50 border-purple-500 text-purple-950 font-bold shadow-xs"
+                          : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full mb-1">
+                        <span className="text-xs">{sc.tag}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/80 border border-slate-200 text-slate-600">
+                          {Math.round(sc.confidence * 100)}%
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 line-clamp-1">
+                        {sc.categoryLabel}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-2.5 rounded-xl border border-purple-300 bg-purple-50 text-purple-900 font-bold text-xs">
+                {currentScenario?.categoryLabel}
+              </div>
+            )}
           </div>
 
           {/* Current Inference Card */}
@@ -600,15 +500,15 @@ export const AiAnalysisModal: React.FC<Props> = ({
             <div className="flex items-center justify-between">
               <h4 className="font-bold text-sm text-slate-800 flex items-center gap-2">
                 <Activity className="w-4 h-4 text-purple-600" />
-                <span>{currentScenario.title}</span>
+                <span>{currentScenario?.title}</span>
               </h4>
               <span className="text-xs px-2.5 py-1 rounded-full bg-purple-100 text-purple-800 font-bold border border-purple-200">
-                综合置信度: {Math.round(currentScenario.confidence * 100)}%
+                规则研判置信度: {Math.round((currentScenario?.confidence ?? 0) * 100)}%
               </span>
             </div>
 
             <p className="text-slate-600 leading-relaxed bg-white p-3 rounded-lg border border-slate-200 text-xs">
-              {currentScenario.summary}
+              {currentScenario?.summary}
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
@@ -617,7 +517,7 @@ export const AiAnalysisModal: React.FC<Props> = ({
                   核心临床异常表征：
                 </span>
                 <ul className="space-y-1 text-slate-600 text-[11px]">
-                  {currentScenario.keyAbnormalities.map((item, idx) => (
+                  {(currentScenario?.keyAbnormalities || []).map((item, idx) => (
                     <li key={idx} className="flex items-start gap-1.5">
                       <span className="text-rose-500 font-bold">•</span>
                       <span>{item}</span>
@@ -631,7 +531,7 @@ export const AiAnalysisModal: React.FC<Props> = ({
                   科研随访与临床建议：
                 </span>
                 <ul className="space-y-1 text-slate-600 text-[11px]">
-                  {currentScenario.recommendations.map((rec, idx) => (
+                  {(currentScenario?.recommendations || []).map((rec, idx) => (
                     <li key={idx} className="flex items-start gap-1.5">
                       <span className="text-teal-600 font-bold">•</span>
                       <span>{rec}</span>
@@ -672,7 +572,7 @@ export const AiAnalysisModal: React.FC<Props> = ({
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 <span>
-                  研判意见已成功推送到医生工作站（待审核消息 +1），经医生电子签字后生效
+                  研判意见已成功推送到医生工作站（待审核消息 +1，规则引擎生成、非 AI），经医生电子签字后生效
                 </span>
               </div>
               {onOpenDoctorApproval && (
@@ -697,10 +597,10 @@ export const AiAnalysisModal: React.FC<Props> = ({
               onClick={handleRealAiReasoning}
               disabled={isAnimating || isSendingMessage}
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
-              title="根据受试者最新量表与生物学指标重新启动多模态推断"
+              title="根据受试者最新量表与生物学指标重新启动常模规则推断"
             >
               <Sparkles className={`w-3.5 h-3.5 ${isAnimating ? "animate-spin" : ""}`} />
-              <span>{isAnimating ? "多阶段推理计算中..." : "重新执行 AI 智能推理"}</span>
+              <span>{isAnimating ? "规则研判计算中..." : "重新生成规则研判"}</span>
             </button>
 
             <button
@@ -710,7 +610,7 @@ export const AiAnalysisModal: React.FC<Props> = ({
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold transition cursor-pointer disabled:opacity-50"
             >
               <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-              <span>重置研判参数</span>
+              <span>重置研判</span>
             </button>
           </div>
 
@@ -722,7 +622,7 @@ export const AiAnalysisModal: React.FC<Props> = ({
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
             >
               <ShieldCheck className="w-4 h-4" />
-              <span>{applied ? "✓ 已应用！已转为「待医生审核签署」" : "应用至临床诊断并提交待审核"}</span>
+              <span>{applied ? "✓ 已应用！已转为「待医生审核签署」" : "应用研判并提交医师审核"}</span>
             </button>
           </div>
         </div>

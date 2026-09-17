@@ -17,7 +17,6 @@ import {
   approveAiConsultation,
   cleanAndSeedStandardCohort,
 } from "./server/turso.ts";
-import { parseDocumentWithOcr, SAMPLE_DOCUMENTS } from "./server/ocrService.ts";
 
 dotenv.config();
 
@@ -214,7 +213,7 @@ app.post("/api/ai/analyze-assessment", async (req: Request, res: Response) => {
     }
 
     const prompt = `
-你是一位专门从事阿尔茨海默病（AD）极早期诊断、主观认知下降（SCD）与轻度认知障碍（MCI）临床研究的资深神经心理学专家（首都医科大学宣武医院认知障碍诊疗研究团队）。
+你是一位专门从事阿尔茨海默病（AD）极早期诊断、主观认知下降（SCD）与轻度认知障碍（MCI）临床研究的资深神经心理学专家（认知障碍临床数据采集系统课程作业神经心理评估团队）。
 请根据以下受试者的全套病史、神经心理量表得分及异常切点、生物标志物数据，生成一份权威、规范、严谨的临床科研综合评估与鉴别诊断报告：
 
 【受试者基础资料与病史】
@@ -441,25 +440,6 @@ app.post("/api/v1/ai-consultations/:id/approve", async (req: Request, res: Respo
 });
 
 // PaddleOCR Mock & Document Extraction Endpoints
-app.post("/api/v1/ocr/parse-record", async (req: Request, res: Response) => {
-  try {
-    const { sampleKey, fileName } = req.body;
-    const result = await parseDocumentWithOcr(sampleKey, fileName);
-    res.json({ success: true, ...result });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error?.message });
-  }
-});
-
-app.get("/api/v1/ocr/samples", (req: Request, res: Response) => {
-  const keys = Object.keys(SAMPLE_DOCUMENTS).map((k) => ({
-    key: k,
-    title: SAMPLE_DOCUMENTS[k].title,
-    preview: SAMPLE_DOCUMENTS[k].text.slice(0, 100) + "...",
-  }));
-  res.json({ success: true, samples: keys });
-});
-
 // AI Medical Record / Discharge Summary / Lab OCR & Parsing Endpoint
 app.post("/api/ai/parse-medical-record", async (req: Request, res: Response) => {
   try {
@@ -696,21 +676,17 @@ async function startServer() {
     await initDatabase();
     // [BUG-DB-01] 原先每次启动都按"非标准队列/脏数据"启发式自动清库重播种，
     // 多人共用共享云库时一方启动即清空他人数据（数据丢失风险）。
-    // 现改为：仅当显式设置 SEED_ON_BOOT=true 时才清库重播种；
-    // 否则仅当 patients 表完全为空（首次运行）才自动播种；已有业务数据一律跳过。
-    const currentPatients = await getAllPatients();
+    // 现改为：默认不写入示例队列；仅当显式设置 SEED_ON_BOOT=true 时才清库重播种；
+    // 已有业务数据一律跳过。示例队列可随时通过 POST /api/v1/reset-cohort 手动触发。
     const seedOnBoot = process.env.SEED_ON_BOOT === "true";
-    const isEmpty = currentPatients.length === 0;
 
     if (seedOnBoot) {
       console.log("[DB] SEED_ON_BOOT=true：即将清空并重置为标准 4 位受试者队列…");
       await cleanAndSeedStandardCohort();
-    } else if (isEmpty) {
-      console.log("[DB] patients 表为空，自动播种标准 4 位受试者队列。");
-      await cleanAndSeedStandardCohort();
     } else {
+      const currentPatients = await getAllPatients();
       console.log(
-        `[DB] 检测到已有 ${currentPatients.length} 位受试者数据，跳过自动播种（如需重置请设置 SEED_ON_BOOT=true 或调用 POST /api/v1/reset-cohort）。`
+        `[DB] 自动播种已关闭（默认不写入示例队列），当前已有 ${currentPatients.length} 位受试者。如需示例数据请设置 SEED_ON_BOOT=true 或调用 POST /api/v1/reset-cohort。`
       );
     }
   } catch (err) {

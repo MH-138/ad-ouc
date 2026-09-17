@@ -114,7 +114,7 @@ export const SectionMemoryBattery: React.FC<Props> = ({ record, onChange, onOpen
         <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
           <div className="text-xs font-bold text-slate-600 mb-2 flex items-center justify-between">
             <span>【12 个标准测试词语库】（点击下方各轮次回忆词语可直接勾选）</span>
-            <span className="text-[11px] text-slate-500 font-normal">宣武多中心标准词表</span>
+            <span className="text-[11px] text-slate-500 font-normal">多中心标准词表</span>
           </div>
           <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-12 gap-1.5">
             {AVLT_WORDS_LIST.map((word, idx) => (
@@ -324,7 +324,7 @@ export const SectionMemoryBattery: React.FC<Props> = ({ record, onChange, onOpen
         {/* Story Text Reference */}
         <div className="p-4 bg-amber-50/50 border border-amber-200/70 rounded-xl space-y-2 text-xs">
           <span className="font-bold text-amber-900 flex items-center space-x-1.5">
-            <span>【宣武标准测验故事文本】</span>
+            <span>【标准测验故事文本】</span>
           </span>
           <p className="text-slate-800 leading-relaxed bg-white p-3 rounded-lg border border-amber-100 font-serif">
             {LOGICAL_MEMORY_STORY.text}

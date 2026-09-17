@@ -23,10 +23,8 @@ import {
 } from "lucide-react";
 import { SubjectRecord } from "../types/assessment";
 import { AppPageId } from "../types/navigation";
-import {
-  evaluateCompleteAssessment,
-  calculateGlobalCDR,
-} from "../utils/scoringCalculators";
+import { evaluateCompleteAssessment } from "../utils/scoringCalculators";
+import { isSimulatedRecord } from "../utils/initialPatient";
 
 interface PatientCenterPageProps {
   currentRecord: SubjectRecord | null;
@@ -66,7 +64,12 @@ export const PatientCenterPage: React.FC<PatientCenterPageProps> = ({
   cohort.forEach((p) => {
     try {
       const summary = evaluateCompleteAssessment(p);
-      const pCdr = calculateGlobalCDR(p?.scales?.cdr);
+      // BUG-FIX: 旧实现直接调用 calculateGlobalCDR(p.scales.cdr)，而新建档案的
+      // cdr 是空对象 {}，会被算出 globalCDR = 0，于是"尚未评定"的受试者被计入
+      // "正常老年对照 NC"，统计出假阴性。现按 isAssessed 判定：
+      // CDR 未评定的受试者不归入任何分型。
+      const pCdr = summary.cdr;
+      if (!pCdr?.isAssessed) return;
       if (pCdr.globalCDR >= 0.5) {
         mciCount++;
       } else if (summary.scdQ9.isPositive) {
@@ -75,7 +78,7 @@ export const PatientCenterPage: React.FC<PatientCenterPageProps> = ({
         ncCount++;
       }
     } catch {
-      ncCount++;
+      // 评估失败等同于未评定，不应计入正常对照
     }
   });
 
@@ -92,7 +95,9 @@ export const PatientCenterPage: React.FC<PatientCenterPageProps> = ({
     if (filterType === "all") return true;
     try {
       const summary = evaluateCompleteAssessment(patient);
-      const pCdr = calculateGlobalCDR(patient?.scales?.cdr);
+      const pCdr = summary.cdr;
+      // 同上：CDR 尚未评定的档案不属于 SCD / aMCI / NC 任何一型
+      if (!pCdr?.isAssessed) return false;
       if (filterType === "scd") return summary.scdQ9.isPositive && pCdr.globalCDR === 0;
       if (filterType === "mci") return pCdr.globalCDR >= 0.5;
       if (filterType === "nc") return !summary.scdQ9.isPositive && pCdr.globalCDR === 0;
@@ -172,7 +177,7 @@ export const PatientCenterPage: React.FC<PatientCenterPageProps> = ({
           <div className="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-200/80">
             <div className="text-xs font-semibold text-emerald-800">正常老年对照 NC</div>
             <div className="text-2xl font-black text-emerald-700 mt-1 font-mono">{ncCount}</div>
-            <div className="text-[11px] text-emerald-600 mt-0.5">认知与主诉正常</div>
+            <div className="text-[11px] text-emerald-600 mt-0.5">认知与主诉正常（不含未评定）</div>
           </div>
         </div>
       </div>
@@ -180,9 +185,17 @@ export const PatientCenterPage: React.FC<PatientCenterPageProps> = ({
       {/* 2. Cohort Search, Filtering and List */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-sm font-bold text-slate-900">受试者档案列表</h2>
             <span className="text-xs text-slate-400">({filteredCohort.length} 位)</span>
+            {cohort.some((p) => isSimulatedRecord(p)) && (
+              <span
+                className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-semibold"
+                title="列表中含系统内置的模拟演示受试者（非真实病例），仅用于功能演示"
+              >
+                含模拟数据档案
+              </span>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -259,9 +272,9 @@ export const PatientCenterPage: React.FC<PatientCenterPageProps> = ({
             let pCdr: any = null;
             try {
               evalResult = evaluateCompleteAssessment(p);
-              pCdr = calculateGlobalCDR(p.scales?.cdr);
+              pCdr = evalResult?.cdr;
               isScdPos = Boolean(evalResult?.scdQ9?.isPositive);
-              isMciPos = Boolean(pCdr?.globalCDR >= 0.5);
+              isMciPos = Boolean(pCdr?.isAssessed && pCdr.globalCDR >= 0.5);
             } catch {
               // fallback
             }
@@ -294,13 +307,21 @@ export const PatientCenterPage: React.FC<PatientCenterPageProps> = ({
                         {p.demographics?.name ? p.demographics.name.slice(0, 1) : "患"}
                       </div>
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-bold text-base text-slate-900">
                             {p.demographics?.name || "未命名"}
                           </span>
                           <span className="text-xs text-slate-500 font-medium">
                             {p.demographics?.gender === 1 ? "男" : "女"} · {p.demographics?.age || "--"}岁
                           </span>
+                          {isSimulatedRecord(p) && (
+                            <span
+                              className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold border border-amber-200"
+                              title="系统内置的模拟演示受试者（非真实病例）"
+                            >
+                              模拟数据
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] font-mono text-slate-400 mt-0.5">
                           编号: {p.subjectNo || p.id} · {p.visitCode || "W000"}

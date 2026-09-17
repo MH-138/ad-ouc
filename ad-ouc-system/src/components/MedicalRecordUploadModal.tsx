@@ -4,6 +4,7 @@ import {
   FileText,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   X,
   Sparkles,
   Camera,
@@ -28,8 +29,8 @@ interface MedicalRecordUploadModalProps {
 const CLINICAL_SIMULATION_CASES = [
   {
     key: "case_sun",
-    title: "宣武医院神经内科门诊病历 (孙桂兰 69岁 女)",
-    fileName: "宣武医院门诊病历_孙桂兰.pdf",
+    title: "神经内科门诊病历 (孙桂兰 69岁 女)",
+    fileName: "示例门诊病历_孙桂兰.pdf",
     previewText:
       "患者姓名：孙桂兰，性别：女，年龄：69岁。主诉自觉记忆力减退1年半，伴丢三落四。既往高血压病史8年，平时血压135/85 mmHg。受教育年限：16年（大专）。头颅MRI：双侧海马MTA 2级轻度萎缩。APOE基因检测：ε3/ε4杂合携带。",
     data: {
@@ -65,7 +66,7 @@ const CLINICAL_SIMULATION_CASES = [
   },
   {
     key: "case_wang",
-    title: "宣武医院脑病科住院出院小结 (王建国 73岁 男)",
+    title: "示例脑病科住院出院小结 (王建国 73岁 男)",
     fileName: "出院小结_王建国_202603.pdf",
     previewText:
       "患者姓名：王建国，性别：男，年龄：73岁。因反应迟缓、近事遗忘2年就诊。既往高血压15年，冠心病5年。文化程度：大学本科（16年）。头颅MRI：额颞叶脑沟增宽，双侧海马萎缩MTA 2级，脑室旁Fazekas 1级。MMSE初筛24分，MoCA-B 19分。",
@@ -153,6 +154,7 @@ export const MedicalRecordUploadModal: React.FC<MedicalRecordUploadModalProps> =
   const [parsedData, setParsedData] = useState<any | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [simulatedDocName, setSimulatedDocName] = useState<string | null>(null);
+  const [isDemoData, setIsDemoData] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -449,24 +451,20 @@ export const MedicalRecordUploadModal: React.FC<MedicalRecordUploadModalProps> =
       }
 
       // Call API
-      let res = await fetch("/api/ai/parse-medical-record", {
+      const res = await fetch("/api/ai/parse-medical-record", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
-        res = await fetch("/api/v1/ocr/parse-record", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-      }
-
       const data = await res.json();
       if (data.success) {
+        setIsDemoData(Boolean(data.isDemo));
         const result = data.clinicalJson || data.parsedData;
-        if (hasCurrentRecord) {
+        if (data.isDemo) {
+          // 演示数据（isDemo）不自动落库，仅展示并由用户显式确认后才可写入
+          setParsedData(result);
+        } else if (hasCurrentRecord) {
           setParsedData(result);
         } else {
           await finalizeParsedRecord(result);
@@ -482,60 +480,18 @@ export const MedicalRecordUploadModal: React.FC<MedicalRecordUploadModalProps> =
     }
   };
 
-  // Dedicated standard loader: 「标准病历/检验单样例」
-  // Automatically loads a standard medical record/lab report, sets it in state, and runs the extraction
-  const handleSimulateDocument = async () => {
-    setIsLoading(true);
-    setErrorMsg(null);
-
-    // Randomly pick a realistic case
-    const randomIndex = Math.floor(Math.random() * CLINICAL_SIMULATION_CASES.length);
-    const selectedCase = CLINICAL_SIMULATION_CASES[randomIndex];
-
-    setSimulatedDocName(selectedCase.fileName);
-    setPastedText(selectedCase.previewText);
-
-    try {
-      // Call backend parsing API with case key
-      const res = await fetch("/api/v1/ocr/parse-record", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sampleKey: selectedCase.key === "case_sun" ? "xuanwu_outpatient" : "mri_report",
-          fileName: selectedCase.fileName,
-        }),
-      });
-
-      const json = await res.json();
-      if (json.success && (json.clinicalJson || json.parsedData)) {
-        const result = json.clinicalJson || json.parsedData;
-        if (hasCurrentRecord) {
-          setParsedData(result);
-        } else {
-          await finalizeParsedRecord(result);
-        }
-      } else {
-        // Fallback to rich case data
-        if (hasCurrentRecord) {
-          setParsedData(selectedCase.data);
-        } else {
-          await finalizeParsedRecord(selectedCase.data);
-        }
-      }
-    } catch (e) {
-      // Direct rich clinical case mapping
-      if (hasCurrentRecord) {
-        setParsedData(selectedCase.data);
-      } else {
-        await finalizeParsedRecord(selectedCase.data);
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // [BUG-OCR-02] 原“载入示例检验单/病历”入口已移除：不再提供一键载入预设演示病历的功能，
+  // 避免用户误将固定假数据当作真实解析结果写入档案。演示解析仅在 parse-record 内部以 isDemo 标记返回，
+  // 并由 handleParse 在 isDemo 时仅展示、不自动落库，写入前需用户二次确认。
 
   const handleApplyToPatient = async () => {
     if (!parsedData) return;
+    if (isDemoData) {
+      const ok = window.confirm(
+        "⚠️ 当前为演示数据（非真实病历识别结果）。确定仍要将其写入患者档案吗？\n建议仅在功能演示时确认。"
+      );
+      if (!ok) return;
+    }
     await finalizeParsedRecord(parsedData);
   };
 
@@ -690,24 +646,24 @@ export const MedicalRecordUploadModal: React.FC<MedicalRecordUploadModalProps> =
                     )}
                   </button>
 
-                  {/* Dedicated button in bottom right: 「载入示例报告」 */}
-                  <button
-                    type="button"
-                    id="btn-simulate-document"
-                    onClick={handleSimulateDocument}
-                    disabled={isLoading}
-                    className="flex items-center gap-1.5 rounded-xl bg-purple-600 px-4 py-2.5 text-xs font-bold text-white shadow-2xs hover:bg-purple-700 disabled:opacity-50 transition cursor-pointer"
-                    title="自动载入一份示例门诊病历或生化检验单并完成解析"
-                  >
-                    <FileSpreadsheet className="h-4 w-4" />
-                    <span>载入示例检验单/病历</span>
-                  </button>
+                  {/* [BUG-OCR-02] 演示“载入示例检验单/病历”按钮已移除，避免误写入假数据 */}
                 </div>
               </div>
             </div>
           ) : (
             /* Parsed Data Confirmation & Review */
             <div className="space-y-4">
+              {isDemoData && (
+                <div className="flex items-start gap-2.5 rounded-xl bg-amber-50 border border-amber-300 p-3.5 text-amber-900 text-xs">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="font-bold text-sm">⚠️ 演示模式：当前解析返回的是示例数据（非真实病历识别结果）</h3>
+                    <p className="text-xs text-amber-700 mt-0.5">
+                      真实的病历 OCR 识别尚未接入，下方信息为系统预设的示例内容，<b>请勿写入真实患者档案</b>。如需使用，请在确认仅用于功能演示后谨慎操作。
+                    </p>
+                  </div>
+                </div>
+              )}
               {/* Extraction Status Bar */}
               <div className="flex items-center justify-between rounded-xl bg-emerald-50 p-3.5 border border-emerald-200 text-emerald-900 text-xs">
                 <div className="flex items-center gap-2.5">

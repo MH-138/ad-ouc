@@ -62,7 +62,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <span className="text-base font-bold tracking-tight sm:text-lg">
-                  宣武医院 AD-SCD 测评系统
+                  认知障碍临床数据采集系统课程作业
                 </span>
               </div>
               <p className="hidden font-mono text-[11px] text-slate-400 sm:block">
