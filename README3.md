@@ -9,7 +9,7 @@
 
 ## 4位演示用户：
 建立 4 位标准受试者队列供分层对照：
-张建华 (SCD-2026-001)：已完成全套测评，韩璎教授已出具随访医嘱并完成电子签名（已审核签署）；
+张建华 (SCD-2026-001)：已完成全套测评，主治医生已出具随访医嘱并完成电子签名（已审核签署）；
 李淑芬 (SCD-2026-002)：已完成 SCD-Q9/GDS/PSQI 自评，待主治医师审核与电子签名（待审核队列唯一单条）；
 王卫国 (BLANK-2026-003)：纯空白男性受试者，量表与医嘱全空，供测评测试；
 赵桂兰 (BLANK-2026-004)：纯空白女性受试者，量表与医嘱全空，供测评测试。
@@ -24,14 +24,14 @@
 | **2. 身份证号智能联动与真实模拟** | 新建档案支持18位身份证格式校验，自动截取反算出生年、实足周岁年龄与判定男女；提供【⚡ 随机一键生成受试者】快速生成真实合规测试档案；OCR识别区支持二代身份证、就诊卡与门诊病历一键识别；新建档案全指标严格为空。 | `src/components/NewPatientModal.tsx`<br>`src/utils/initialPatient.ts` |
 | **3. 队列数据分层与随访状态交互** | 清理历史乱码与旧受试者，建立分层清晰的标准队列（张建华-已签署随访医嘱、李淑芬-已自评待医生审核、王卫国与赵桂兰-纯空白对照）；档案卡片随访状态可交互点击查看完整医嘱或未出具提示。 | `src/pages/PatientCenterPage.tsx`<br>`server/turso.ts`<br>`server.ts` |
 | **4. 云端数据库设计与去重实现** | 接入 Turso LibSQL 云端关系型数据库，建立 4 张核心数据表（`patients`、`assessments`、`drafts`、`ai_consultations`）。待办审核队列严格按单患者唯一去重，医生签署后自动同步至受试者与家属端。 | `server/turso.ts`<br>`server.ts`<br>`src/services/tursoApi.ts` |
-| **5. 全套神经心理量表与空白保护** | 严格按宣武医院及多中心标准实现全套量表（MMSE、MoCA-B、AVLT-H、STT连线、CDR、FAQ、PSQI等）。空白受试者各题项显示为 `--`（待测），MoCA-B 提供空选项防误选，红黄绿灯矩阵不误报异常，全流程自动保存留痕。 | `src/pages/MmsePage.tsx`<br>`src/pages/MocaBPage.tsx`<br>`src/components/sections/SectionComprehensiveReport.tsx` |
+| **5. 全套神经心理量表与空白保护** | 严格按及多中心标准实现全套量表（MMSE、MoCA-B、AVLT-H、STT连线、CDR、FAQ、PSQI等）。空白受试者各题项显示为 `--`（待测），MoCA-B 提供空选项防误选，红黄绿灯矩阵不误报异常，全流程自动保存留痕。 | `src/pages/MmsePage.tsx`<br>`src/pages/MocaBPage.tsx`<br>`src/components/sections/SectionComprehensiveReport.tsx` |
 | **6. AI 临床智能推理平滑动态闭环** | 每次推理必播放 0%->32%->68%->92%->100% 平滑阶段动画，研判意见根据实际数据动态生成并附加唯一流水号与时间戳；推理完成后打上“待审核”标签并自动推至医生待办工作台。 | `src/components/AiAnalysisModal.tsx`<br>`src/components/DoctorApprovalModal.tsx` |
 
 ---
 
 ## 一、版本核心升级概述
 
-基于临床规范、宣武医院多中心 SCD/MCI 诊断标准及最新定稿业务流程，V3.0 版本对系统进行了全栈工程化重构与严格的业务解耦：
+基于临床规范、多中心 SCD/MCI 诊断标准及最新定稿业务流程，V3.0 版本对系统进行了全栈工程化重构与严格的业务解耦：
 
 1. **三端独立通道彻底解耦**：
    - **受试者端**：本人档案确认与自评通道，支持 SCD-Q9 自评与跳过（跳过不计 0 分），个人健康档案剥离内部量表与内部鉴别诊断。

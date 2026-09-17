@@ -763,7 +763,7 @@ export async function cleanAndSeedStandardCohort() {
       height_cm: 168,
       weight_kg: 66,
       phone: "13801015678",
-      source: "xuanwu_outpatient",
+      source: "memory_clinic_outpatient",
       created_by_role: "doctor",
       raw_data: {
         id: "sub-scd-001",

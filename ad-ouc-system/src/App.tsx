@@ -57,7 +57,7 @@ export default function App() {
 
   // 3. Cohort & Active Patient State
   const [cohort, setCohort] = useState<SubjectRecord[]>(() => {
-    const saved = localStorage.getItem("xuanwu_scd_patient_cohort");
+    const saved = localStorage.getItem("adouc_scd_patient_cohort");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -158,18 +158,18 @@ export default function App() {
 
   // Persist State
   useEffect(() => {
-    localStorage.setItem("xuanwu_scd_active_portal", currentPortal);
+    localStorage.setItem("adouc_scd_active_portal", currentPortal);
   }, [currentPortal]);
 
   useEffect(() => {
-    localStorage.setItem("xuanwu_scd_patient_cohort", JSON.stringify(cohort));
+    localStorage.setItem("adouc_scd_patient_cohort", JSON.stringify(cohort));
   }, [cohort]);
 
   useEffect(() => {
     if (activePatientId) {
-      localStorage.setItem("xuanwu_scd_active_patient_id", activePatientId);
+      localStorage.setItem("adouc_scd_active_patient_id", activePatientId);
     } else {
-      localStorage.removeItem("xuanwu_scd_active_patient_id");
+      localStorage.removeItem("adouc_scd_active_patient_id");
     }
   }, [activePatientId]);
 
